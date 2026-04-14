@@ -10,7 +10,7 @@ import {afterEach, describe, it} from 'node:test';
 
 import sinon from 'sinon';
 
-import type {ParsedArguments} from '../../src/bin/chrome-devtools-mcp-cli-options.js';
+import type {ParsedArguments} from '../../src/bin/opera-devtools-mcp-cli-options.js';
 import {
   installExtension,
   uninstallExtension,

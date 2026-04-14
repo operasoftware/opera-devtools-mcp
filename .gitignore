@@ -1,0 +1,23 @@
+# Build output
+build/
+
+# Dependencies
+node_modules/
+
+# TypeScript
+*.tsbuildinfo
+
+# Cache
+.eslintcache
+.prettiercache
+.cache/
+
+# Logs
+*.log
+npm-debug.log*
+
+# macOS
+.DS_Store
+
+# Environment
+.env

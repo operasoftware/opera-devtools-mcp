@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type {cliOptions} from '../bin/chrome-devtools-mcp-cli-options.js';
+import type {cliOptions} from '../bin/opera-devtools-mcp-cli-options.js';
 import {toSnakeCase} from '../utils/string.js';
 
 import type {FlagUsage} from './types.js';

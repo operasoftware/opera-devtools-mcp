@@ -1,4 +1,5 @@
-# Chrome DevTools MCP
+# Opera DevTools
+This is a fork of Chrome DevTools MCP (https://github.com/ChromeDevTools/chrome-devtools-mcp), extended to with custom Opera functioanlity support.
 
 [![npm chrome-devtools-mcp package](https://img.shields.io/npm/v/chrome-devtools-mcp.svg)](https://npmjs.org/package/chrome-devtools-mcp)
 

@@ -6,7 +6,7 @@
 
 import type fs from 'node:fs';
 
-import type {parseArguments} from './bin/chrome-devtools-mcp-cli-options.js';
+import type {parseArguments} from './bin/opera-devtools-mcp-cli-options.js';
 import type {Channel} from './browser.js';
 import {ensureBrowserConnected, ensureBrowserLaunched} from './browser.js';
 import {loadIssueDescriptions} from './issue-descriptions.js';

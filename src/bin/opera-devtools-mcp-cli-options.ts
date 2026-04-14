@@ -24,7 +24,7 @@ export const cliOptions = {
   browserUrl: {
     type: 'string',
     description:
-      'Connect to a running, debuggable Chrome instance (e.g. `http://127.0.0.1:9222`). For more details see: https://github.com/ChromeDevTools/chrome-devtools-mcp#connecting-to-a-running-chrome-instance.',
+      'Connect to a running, debuggable Chrome instance (e.g. `http://127.0.0.1:9222`). For more details see: https://github.com/operasoftware/opera-devtools-mcp#connecting-to-a-running-chrome-instance.',
     alias: 'u',
     conflicts: ['wsEndpoint', 'categoryExtensions'],
     coerce: (url: string | undefined) => {
@@ -106,7 +106,7 @@ export const cliOptions = {
   userDataDir: {
     type: 'string',
     description:
-      'Path to the user data directory for Chrome. Default is $HOME/.cache/chrome-devtools-mcp/chrome-profile$CHANNEL_SUFFIX_IF_NON_STABLE',
+      'Path to the user data directory for Chrome. Default is $HOME/.cache/opera-devtools-mcp/chrome-profile$CHANNEL_SUFFIX_IF_NON_STABLE',
     conflicts: ['browserUrl', 'wsEndpoint', 'isolated'],
   },
   channel: {
@@ -188,12 +188,12 @@ export const cliOptions = {
   chromeArg: {
     type: 'array',
     describe:
-      'Additional arguments for Chrome. Only applies when Chrome is launched by chrome-devtools-mcp.',
+      'Additional arguments for Chrome. Only applies when Chrome is launched by opera-devtools-mcp.',
   },
   ignoreDefaultChromeArg: {
     type: 'array',
     describe:
-      'Explicitly disable default arguments for Chrome. Only applies when Chrome is launched by chrome-devtools-mcp.',
+      'Explicitly disable default arguments for Chrome. Only applies when Chrome is launched by opera-devtools-mcp.',
   },
   categoryEmulation: {
     type: 'boolean',
@@ -267,7 +267,7 @@ export type ParsedArguments = ReturnType<typeof parseArguments>;
 
 export function parseArguments(version: string, argv = process.argv) {
   const yargsInstance = yargs(hideBin(argv))
-    .scriptName('npx chrome-devtools-mcp@latest')
+    .scriptName('npx opera-devtools-mcp@latest')
     .options(cliOptions)
     .check(args => {
       // We can't set default in the options else
@@ -333,7 +333,7 @@ export function parseArguments(version: string, argv = process.argv) {
       ],
       [
         '$0 --no-usage-statistics',
-        'Do not send usage statistics https://github.com/ChromeDevTools/chrome-devtools-mcp#usage-statistics.',
+        'Do not send usage statistics https://github.com/operasoftware/opera-devtools-mcp-mcp#usage-statistics.',
       ],
       [
         '$0 --no-performance-crux',

@@ -7,7 +7,7 @@
 import assert from 'node:assert';
 import {describe, it} from 'node:test';
 
-import {parseArguments} from '../src/bin/chrome-devtools-mcp-cli-options.js';
+import {parseArguments} from '../src/bin/opera-devtools-mcp-cli-options.js';
 
 describe('cli args parsing', () => {
   const defaultArgs = {
