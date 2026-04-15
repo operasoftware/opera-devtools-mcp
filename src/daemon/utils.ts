@@ -17,10 +17,10 @@ export const INDEX_SCRIPT_PATH = path.join(
   import.meta.dirname,
   '..',
   'bin',
-  'chrome-devtools-mcp.js',
+  'opera-devtools-mcp.js',
 );
 
-const APP_NAME = 'chrome-devtools-mcp';
+const APP_NAME = 'opera-devtools-mcp';
 export const DAEMON_CLIENT_NAME = 'chrome-devtools-cli-daemon';
 
 // Using these paths due to strict limits on the POSIX socket path length.

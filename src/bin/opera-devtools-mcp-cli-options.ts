@@ -225,15 +225,15 @@ export const cliOptions = {
   },
   performanceCrux: {
     type: 'boolean',
-    default: true,
+    default: false,
     describe:
-      'Set to false to disable sending URLs from performance traces to CrUX API to get field performance data.',
+      'Set to true to enable sending URLs from performance traces to CrUX API to get field performance data.',
   },
   usageStatistics: {
     type: 'boolean',
-    default: true,
+    default: false,
     describe:
-      'Set to false to opt-out of usage statistics collection. Google collects usage data to improve the tool, handled under the Google Privacy Policy (https://policies.google.com/privacy). This is independent from Chrome browser metrics. Disabled if `CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS` or `CI` env variables are set.',
+      'Set to true to opt-in to usage statistics collection. Google collects usage data to improve the tool, handled under the Google Privacy Policy (https://policies.google.com/privacy). This is independent from Chrome browser metrics. Disabled if `OPERA_DEVTOOLS_NO_USAGE_STATISTICS` or `CI` env variables are set.',
   },
   clearcutEndpoint: {
     type: 'string',

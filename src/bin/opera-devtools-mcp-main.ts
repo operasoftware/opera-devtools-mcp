@@ -24,15 +24,14 @@ await checkForUpdates(
 export const args = parseArguments(VERSION);
 
 const logFile = args.logFile ? saveLogsToFile(args.logFile) : undefined;
-if (
-  process.env['CI'] ||
-  process.env['OPERA_DEVTOOLS_NO_USAGE_STATISTICS']
-) {
+// Always disable usage statistics and CrUX data collection.
+if (args.usageStatistics || args.performanceCrux) {
   console.error(
-    "turning off usage statistics. process.env['CI'] || process.env['OPERA_DEVTOOLS_NO_USAGE_STATISTICS'] is set.",
+    'Warning: usage statistics or CrUX were enabled via flags — forcing off.',
   );
-  args.usageStatistics = false;
 }
+args.usageStatistics = false;
+args.performanceCrux = false;
 
 if (process.env['OPERA_DEVTOOLS_CRASH_ON_UNCAUGHT'] !== 'true') {
   process.on('unhandledRejection', (reason, promise) => {
