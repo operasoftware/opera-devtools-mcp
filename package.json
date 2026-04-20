@@ -1,6 +1,6 @@
 {
   "name": "opera-devtools-mcp",
-  "version": "0.21.0",
+  "version": "0.21.4",
   "description": "MCP server for Opera DevTools",
   "type": "module",
   "bin": {

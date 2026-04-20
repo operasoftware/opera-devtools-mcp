@@ -1,7 +1,8 @@
 /**
  * @license
- * Copyright 2025 Google LLC
- * SPDX-License-Identifier: Apache-2.0
+ * Copyright 2026 Opera Norway AS. All rights reserved.
+ *
+ * This file is an original work developed by Opera.
  */
 
 import {zod} from '../third_party/index.js';
@@ -11,18 +12,96 @@ import {definePageTool} from './ToolDefinition.js';
 
 type CDPSession = {
   send(method: string, params?: Record<string, unknown>): Promise<unknown>;
+  on(event: string, listener: (params: unknown) => void): void;
+  off(event: string, listener: (params: unknown) => void): void;
 };
 
 const getCDPSession = (page: {_client(): CDPSession}): CDPSession =>
   page._client();
 
-const operaCommand = async (
+const MAX_SW_RETRIES = 5;
+const SW_RETRY_DELAY_MS = 1000;
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function withServiceWorkerRetry<T>(fn: () => Promise<T>): Promise<T> {
+  let lastError: Error | undefined;
+  for (let attempt = 0; attempt < MAX_SW_RETRIES; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastError = e as Error;
+      if (attempt < MAX_SW_RETRIES - 1) {
+        await sleep(SW_RETRY_DELAY_MS);
+      }
+    }
+  }
+  throw lastError;
+}
+
+const dispatchAction = async (
   session: CDPSession,
-  method: string,
-  params: Record<string, unknown>,
+  payload: Record<string, unknown>,
 ): Promise<string> => {
-  const response = (await session.send(method, params)) as {result: string};
+  const response = (await withServiceWorkerRetry(() =>
+    session.send('Opera.dispatchAction', {payload}),
+  )) as {result: string};
   return response.result;
+};
+
+const dispatchWithStreamedResponse = (
+  session: CDPSession,
+  payload: Record<string, unknown>,
+  onChunkCallback?: (chunk: string) => void,
+): Promise<string> => {
+  return withServiceWorkerRetry(() =>
+    session.send('Opera.dispatchWithStreamedResponse', {payload}),
+  ).then(raw => {
+      const {correlationId} = raw as {correlationId: string};
+      return new Promise<string>((resolve, reject) => {
+        const onChunk = (params: unknown) => {
+          const {correlationId: id, chunk} = params as {
+            correlationId: string;
+            chunk: string;
+          };
+          if (id === correlationId && onChunkCallback) {
+            onChunkCallback(chunk);
+          }
+        };
+
+        const onCompleted = (params: unknown) => {
+          const {correlationId: id, result} = params as {
+            correlationId: string;
+            result: string;
+          };
+          if (id === correlationId) {
+            cleanup();
+            resolve(result);
+          }
+        };
+
+        const onFailed = (params: unknown) => {
+          const {correlationId: id, error} = params as {
+            correlationId: string;
+            error: string;
+          };
+          if (id === correlationId) {
+            cleanup();
+            reject(new Error(error));
+          }
+        };
+
+        const cleanup = () => {
+          session.off('Opera.actionChunk', onChunk);
+          session.off('Opera.actionCompleted', onCompleted);
+          session.off('Opera.actionFailed', onFailed);
+        };
+
+        session.on('Opera.actionChunk', onChunk);
+        session.on('Opera.actionCompleted', onCompleted);
+        session.on('Opera.actionFailed', onFailed);
+      });
+    });
 };
 
 export const operaChat = definePageTool({
@@ -40,13 +119,14 @@ export const operaChat = definePageTool({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const session = getCDPSession(request.page.pptrPage as any);
     try {
-      const result = await operaCommand(session, 'Opera.chat', {
+      const result = await dispatchAction(session, {
+        action: 'chat',
         prompt: request.params.prompt,
       });
       response.appendResponseLine(result);
     } catch (e) {
       response.appendResponseLine(
-        `Opera.chat is not supported by this browser: ${(e as Error).message}`,
+        `Opera.dispatchAction(chat) is not supported by this browser: ${(e as Error).message}`,
       );
     }
   },
@@ -69,13 +149,18 @@ export const operaDo = definePageTool({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const session = getCDPSession(request.page.pptrPage as any);
     try {
-      const result = await operaCommand(session, 'Opera.invokeDo', {
-        prompt: request.params.prompt,
-      });
+      const result = await dispatchWithStreamedResponse(
+        session,
+        {
+          action: 'do',
+          prompt: request.params.prompt,
+        },
+        chunk => response.sendLog(chunk),
+      );
       response.appendResponseLine(result);
     } catch (e) {
       response.appendResponseLine(
-        `Opera.invokeDo is not supported by this browser: ${(e as Error).message}`,
+        `Opera.dispatchWithStreamedResponse(do) is not supported by this browser: ${(e as Error).message}`,
       );
     }
   },
@@ -96,13 +181,14 @@ export const operaMake = definePageTool({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const session = getCDPSession(request.page.pptrPage as any);
     try {
-      const result = await operaCommand(session, 'Opera.make', {
+      const result = await dispatchAction(session, {
+        action: 'make',
         prompt: request.params.prompt,
       });
       response.appendResponseLine(result);
     } catch (e) {
       response.appendResponseLine(
-        `Opera.make is not supported by this browser: ${(e as Error).message}`,
+        `Opera.dispatchAction(make) is not supported by this browser: ${(e as Error).message}`,
       );
     }
   },
@@ -128,16 +214,23 @@ export const operaResearch = definePageTool({
   handler: async (request, response) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const session = getCDPSession(request.page.pptrPage as any);
-    const params: Record<string, unknown> = {prompt: request.params.prompt};
+    const payload: Record<string, unknown> = {
+      action: 'research',
+      prompt: request.params.prompt,
+    };
     if (request.params.researchType !== undefined) {
-      params['researchType'] = request.params.researchType;
+      payload['researchType'] = request.params.researchType;
     }
     try {
-      const result = await operaCommand(session, 'Opera.research', params);
+      const result = await dispatchWithStreamedResponse(
+        session,
+        payload,
+        chunk => response.sendLog(chunk),
+      );
       response.appendResponseLine(result);
     } catch (e) {
       response.appendResponseLine(
-        `Opera.research is not supported by this browser: ${(e as Error).message}`,
+        `Opera.dispatchWithStreamedResponse(research) is not supported by this browser: ${(e as Error).message}`,
       );
     }
   },

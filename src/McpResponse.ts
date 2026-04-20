@@ -185,9 +185,18 @@ export class McpResponse implements Response {
   #tabId?: string;
   #args: ParsedArguments;
   #page?: McpPage;
+  #logCallback?: (message: string) => void;
 
-  constructor(args: ParsedArguments) {
+  constructor(
+    args: ParsedArguments,
+    logCallback?: (message: string) => void,
+  ) {
     this.#args = args;
+    this.#logCallback = logCallback;
+  }
+
+  sendLog(message: string): void {
+    this.#logCallback?.(message);
   }
 
   setPage(page: McpPage): void {
