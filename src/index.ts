@@ -188,9 +188,15 @@ export async function createMcpServer(
           const context = await getContext();
           logger(`${tool.name} context: resolved`);
           await context.detectOpenDevToolsWindows();
+          const logCallback = (message: string) => {
+            void server.sendLoggingMessage({
+              level: 'info',
+              data: message,
+            });
+          };
           const response = serverArgs.slim
-            ? new SlimMcpResponse(serverArgs)
-            : new McpResponse(serverArgs);
+            ? new SlimMcpResponse(serverArgs, logCallback)
+            : new McpResponse(serverArgs, logCallback);
           if ('pageScoped' in tool && tool.pageScoped) {
             const page =
               serverArgs.experimentalPageIdRouting &&

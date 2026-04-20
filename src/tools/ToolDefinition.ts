@@ -98,6 +98,7 @@ export interface DevToolsData {
 }
 
 export interface Response {
+  sendLog(message: string): void;
   appendResponseLine(value: string): void;
   setIncludePages(value: boolean): void;
   setIncludeNetworkRequests(
