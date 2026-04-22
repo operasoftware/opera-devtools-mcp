@@ -161,7 +161,7 @@ export const operaDo = definePageTool({
       response.appendResponseLine(result);
     } catch (e) {
       response.appendResponseLine(
-        `Opera.dispatchWithStreamedResponse(do) ailed with error:: ${(e as Error).message}`,
+        `Opera.dispatchWithStreamedResponse(do) failed with error:: ${(e as Error).message}`,
       );
     }
   },
