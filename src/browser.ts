@@ -270,4 +270,19 @@ export async function ensureBrowserLaunched(
   return browser;
 }
 
+export function getCurrentBrowser(): Browser | undefined {
+  return browser;
+}
+
+export async function closeBrowserIfOpen(): Promise<void> {
+  if (browser?.connected) {
+    try {
+      await browser.close();
+    } catch {
+      // ignore — browser may already be closed
+    }
+  }
+  browser = undefined;
+}
+
 export type Channel = 'stable' | 'canary' | 'beta' | 'dev';
