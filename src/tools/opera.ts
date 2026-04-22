@@ -161,7 +161,7 @@ export const operaDo = definePageTool({
       response.appendResponseLine(result);
     } catch (e) {
       response.appendResponseLine(
-        `Opera.dispatchWithStreamedResponse(do) failed with error:: ${(e as Error).message}`,
+        `Opera.dispatchWithStreamedResponse(do) failed with error: ${(e as Error).message}`,
       );
     }
   },
@@ -189,7 +189,7 @@ export const operaMake = definePageTool({
       response.appendResponseLine(result);
     } catch (e) {
       response.appendResponseLine(
-        `Opera.dispatchAction(make) failed with error:: ${(e as Error).message}`,
+        `Opera.dispatchAction(make) failed with error: ${(e as Error).message}`,
       );
     }
   },
@@ -231,7 +231,7 @@ export const operaResearch = definePageTool({
       response.appendResponseLine(result);
     } catch (e) {
       response.appendResponseLine(
-        `Opera.dispatchWithStreamedResponse(research) failed with error:: ${(e as Error).message}`,
+        `Opera.dispatchWithStreamedResponse(research) failed with error: ${(e as Error).message}`,
       );
     }
   },
