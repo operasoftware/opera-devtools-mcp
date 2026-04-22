@@ -8,7 +8,7 @@ import type fs from 'node:fs';
 
 import type {parseArguments} from './bin/opera-devtools-mcp-cli-options.js';
 import type {Channel} from './browser.js';
-import {ensureBrowserConnected, ensureBrowserLaunched} from './browser.js';
+import {closeBrowserIfOpen, ensureBrowserConnected, ensureBrowserLaunched, getCurrentBrowser} from './browser.js';
 import {loadIssueDescriptions} from './issue-descriptions.js';
 import {logger} from './logger.js';
 import {McpContext} from './McpContext.js';
@@ -64,7 +64,8 @@ export async function createMcpServer(
     }
   };
 
-  let context: McpContext;
+  let context: McpContext | undefined;
+  let browserHasOperaFlags = false;
   async function getContext(): Promise<McpContext> {
     const chromeArgs: string[] = (serverArgs.chromeArg ?? []).map(String);
     const ignoreDefaultChromeArgs: string[] = (
@@ -111,6 +112,44 @@ export async function createMcpServer(
       });
     }
     return context;
+  }
+
+  async function restartBrowserWithoutOperaFlags(): Promise<void> {
+    context?.dispose();
+    context = undefined;
+    browserHasOperaFlags = false;
+    await closeBrowserIfOpen();
+    // getContext() will relaunch without --disable-blink-features=AutomationControlled
+  }
+
+  async function restartBrowserForOpera(): Promise<void> {
+    context?.dispose();
+    context = undefined;
+    browserHasOperaFlags = false;
+    await closeBrowserIfOpen();
+    const chromeArgs: string[] = [
+      '--disable-blink-features=AutomationControlled',
+      ...(serverArgs.chromeArg ?? []).map(String),
+    ];
+    if (serverArgs.proxyServer) {
+      chromeArgs.push(`--proxy-server=${serverArgs.proxyServer}`);
+    }
+    await ensureBrowserLaunched({
+      headless: serverArgs.headless,
+      executablePath: serverArgs.executablePath,
+      channel: serverArgs.channel as Channel,
+      isolated: serverArgs.isolated ?? false,
+      userDataDir: serverArgs.userDataDir,
+      logFile: options.logFile,
+      viewport: serverArgs.viewport,
+      chromeArgs,
+      ignoreDefaultChromeArgs: (serverArgs.ignoreDefaultChromeArg ?? []).map(String),
+      acceptInsecureCerts: serverArgs.acceptInsecureCerts,
+      devtools: serverArgs.experimentalDevtools ?? false,
+      enableExtensions: serverArgs.categoryExtensions,
+      viaCli: serverArgs.viaCli,
+    });
+    browserHasOperaFlags = true;
   }
 
   const toolMutex = new Mutex();
@@ -184,6 +223,24 @@ export async function createMcpServer(
         const startTime = Date.now();
         let success = false;
         try {
+          const isLaunchMode =
+            !serverArgs.browserUrl &&
+            !serverArgs.wsEndpoint &&
+            !serverArgs.autoConnect;
+          const needsOperaFlags =
+            tool.name === 'opera_do' || tool.name === 'opera_research';
+          const browserConnected = getCurrentBrowser()?.connected ?? false;
+          if (isLaunchMode) {
+            if (needsOperaFlags && !(browserHasOperaFlags && browserConnected)) {
+              await restartBrowserForOpera();
+            } else if (
+              !needsOperaFlags &&
+              browserHasOperaFlags &&
+              browserConnected
+            ) {
+              await restartBrowserWithoutOperaFlags();
+            }
+          }
           logger(`${tool.name} request: ${JSON.stringify(params, null, '  ')}`);
           const context = await getContext();
           logger(`${tool.name} context: resolved`);

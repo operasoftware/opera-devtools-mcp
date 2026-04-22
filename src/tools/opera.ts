@@ -126,8 +126,9 @@ export const operaChat = definePageTool({
       response.appendResponseLine(result);
     } catch (e) {
       response.appendResponseLine(
-        `Opera.dispatchAction(chat) is not supported by this browser: ${(e as Error).message}`,
+        `Opera.dispatchAction(chat) failed with error: ${(e as Error).message}`,
       );
+ 
     }
   },
 });
@@ -160,7 +161,7 @@ export const operaDo = definePageTool({
       response.appendResponseLine(result);
     } catch (e) {
       response.appendResponseLine(
-        `Opera.dispatchWithStreamedResponse(do) is not supported by this browser: ${(e as Error).message}`,
+        `Opera.dispatchWithStreamedResponse(do) ailed with error:: ${(e as Error).message}`,
       );
     }
   },
@@ -188,7 +189,7 @@ export const operaMake = definePageTool({
       response.appendResponseLine(result);
     } catch (e) {
       response.appendResponseLine(
-        `Opera.dispatchAction(make) is not supported by this browser: ${(e as Error).message}`,
+        `Opera.dispatchAction(make) failed with error:: ${(e as Error).message}`,
       );
     }
   },
@@ -230,7 +231,7 @@ export const operaResearch = definePageTool({
       response.appendResponseLine(result);
     } catch (e) {
       response.appendResponseLine(
-        `Opera.dispatchWithStreamedResponse(research) is not supported by this browser: ${(e as Error).message}`,
+        `Opera.dispatchWithStreamedResponse(research) failed with error:: ${(e as Error).message}`,
       );
     }
   },
