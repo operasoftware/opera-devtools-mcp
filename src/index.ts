@@ -220,8 +220,10 @@ export async function createMcpServer(
         inputSchema: schema,
         annotations: tool.annotations,
       },
-      async (params): Promise<CallToolResult> => {
-        const guard = await toolMutex.acquire();
+      async (params, extra): Promise<CallToolResult> => {
+        const guard = tool.annotations.category === ToolCategory.OPERA
+          ? null
+          : await toolMutex.acquire();
         const startTime = Date.now();
         let success = false;
         try {
@@ -248,9 +250,13 @@ export async function createMcpServer(
           logger(`${tool.name} context: resolved`);
           await context.detectOpenDevToolsWindows();
           const logCallback = (message: string) => {
-            void server.sendLoggingMessage({
-              level: 'info',
-              data: message,
+            // `logger` carries the MCP request ID so the opera-cli bridge can route
+            // this chunk to the correct HTTP response (see bridge.ts requestLoggers).
+            // `data` stays a plain string so non-bridge MCP hosts (Claude Desktop,
+            // VS Code, etc.) continue to render it as readable text.
+            void extra.sendNotification({
+              method: 'notifications/message',
+              params: {level: 'info', data: message, logger: String(extra.requestId)},
             });
           };
           const response = serverArgs.slim
@@ -320,7 +326,7 @@ export async function createMcpServer(
             success,
             latencyMs: bucketizeLatency(Date.now() - startTime),
           });
-          guard.dispose();
+          guard?.dispose();
         }
       },
     );
