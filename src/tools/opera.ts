@@ -53,6 +53,7 @@ const dispatchWithStreamedResponse = (
   session: CDPSession,
   payload: Record<string, unknown>,
   onChunkCallback?: (chunk: string) => void,
+  signal?: AbortSignal,
 ): Promise<string> => {
   return withServiceWorkerRetry(() =>
     session.send('Opera.dispatchWithStreamedResponse', {payload}),
@@ -96,6 +97,15 @@ const dispatchWithStreamedResponse = (
           session.off('Opera.actionCompleted', onCompleted);
           session.off('Opera.actionFailed', onFailed);
         };
+
+        if (signal?.aborted) {
+          reject(signal.reason);
+          return;
+        }
+        signal?.addEventListener('abort', () => {
+          cleanup();
+          reject(signal.reason);
+        }, {once: true});
 
         session.on('Opera.actionChunk', onChunk);
         session.on('Opera.actionCompleted', onCompleted);
@@ -157,9 +167,11 @@ export const operaDo = definePageTool({
           prompt: request.params.prompt,
         },
         chunk => response.sendLog(chunk),
+        request.signal,
       );
       response.appendResponseLine(result);
     } catch (e) {
+      if ((e as Error).name === 'AbortError') throw e;
       response.appendResponseLine(
         `Opera.dispatchWithStreamedResponse(do) failed with error: ${(e as Error).message}`,
       );
@@ -227,9 +239,11 @@ export const operaResearch = definePageTool({
         session,
         payload,
         chunk => response.sendLog(chunk),
+        request.signal,
       );
       response.appendResponseLine(result);
     } catch (e) {
+      if ((e as Error).name === 'AbortError') throw e;
       response.appendResponseLine(
         `Opera.dispatchWithStreamedResponse(research) failed with error: ${(e as Error).message}`,
       );

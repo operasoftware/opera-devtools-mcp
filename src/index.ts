@@ -274,6 +274,7 @@ export async function createMcpServer(
               {
                 params,
                 page,
+                signal: extra.signal,
               },
               response,
               context,
@@ -283,6 +284,7 @@ export async function createMcpServer(
               // @ts-expect-error types do not match.
               {
                 params,
+                signal: extra.signal,
               },
               response,
               context,
