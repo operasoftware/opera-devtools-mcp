@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.1.2](https://github.com/operasoftware/opera-devtools-mcp/compare/opera-devtools-mcp-v0.1.1...opera-devtools-mcp-v0.1.2) (2026-05-04)
+
+
+### 🎉 Features
+
+* automation flag for neon DO and Reserach ([e6ef4ba](https://github.com/operasoftware/opera-devtools-mcp/commit/e6ef4ba30eeec5ba9b3441f356226f7b7ec682eb))
+* automation flag for neon DO and Reserach ([b23f0c4](https://github.com/operasoftware/opera-devtools-mcp/commit/b23f0c4bc1a6fd5d6317b11d09cf3a051b7e16d4))
+* dispatchAction and dispatchWithStreamedResponse ([9724de0](https://github.com/operasoftware/opera-devtools-mcp/commit/9724de02dc8c0cb16eae82a6aecde6bb08bb414d))
+* dispatchAction and dispatchWithStreamedResponse ([801595b](https://github.com/operasoftware/opera-devtools-mcp/commit/801595b39c73efa541069b426d250cc1e64ba775))
+* run Opera tools in parallel by skipping the global tool mutex ([2b42e89](https://github.com/operasoftware/opera-devtools-mcp/commit/2b42e8992097675190f8fda09e724cf205db815e))
+* run Opera tools in parallel by skipping the global tool mutex ([d9988fe](https://github.com/operasoftware/opera-devtools-mcp/commit/d9988fe583855754776525bdb930f2c3699aaa79))
+
+
+### 🛠️ Fixes
+
+* clean up CDP listeners on MCP cancellation ([bb3b64f](https://github.com/operasoftware/opera-devtools-mcp/commit/bb3b64ff391521097fbdf531538e63fe7a24a8b7))
+
 ## [0.21.0](https://github.com/ChromeDevTools/chrome-devtools-mcp/compare/chrome-devtools-mcp-v0.20.3...chrome-devtools-mcp-v0.21.0) (2026-04-01)
 
 
