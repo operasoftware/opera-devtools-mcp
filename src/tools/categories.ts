@@ -15,6 +15,7 @@ export enum ToolCategory {
   THIRD_PARTY = 'experimentalThirdParty',
   MEMORY = 'memory',
   WEBMCP = 'experimentalWebmcp',
+  OPERA = 'opera',
 }
 
 export const labels = {
@@ -28,6 +29,7 @@ export const labels = {
   [ToolCategory.THIRD_PARTY]: 'Third-party',
   [ToolCategory.MEMORY]: 'Memory',
   [ToolCategory.WEBMCP]: 'WebMCP',
+  [ToolCategory.OPERA]: 'Opera',
 };
 
 export const OFF_BY_DEFAULT_CATEGORIES = [

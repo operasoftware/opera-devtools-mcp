@@ -209,6 +209,7 @@ export function appendWaitForResult(
   }
 }
 
+
 export function getNetworkMultiplierFromString(
   condition: string | null,
 ): number {
