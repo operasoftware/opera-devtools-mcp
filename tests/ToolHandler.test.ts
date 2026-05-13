@@ -9,7 +9,7 @@ import {afterEach, describe, it} from 'node:test';
 
 import sinon from 'sinon';
 
-import {parseArguments} from '../src/bin/chrome-devtools-mcp-cli-options.js';
+import {parseArguments} from '../src/bin/opera-devtools-mcp-cli-options.js';
 import {McpContext} from '../src/McpContext.js';
 import {McpPage} from '../src/McpPage.js';
 import {Mutex} from '../src/Mutex.js';
@@ -50,7 +50,7 @@ describe('ToolHandler', () => {
 
     const toolMutex = new Mutex();
     const serverArgs = parseArguments('1.0.0', ['node', 'script.js'], {
-      CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: 'true',
+      OPERA_DEVTOOLS_NO_USAGE_STATISTICS: 'true',
     });
 
     const toolHandler = new ToolHandler(
@@ -88,7 +88,7 @@ describe('ToolHandler', () => {
 
     const toolMutex = new Mutex();
     const serverArgs = parseArguments('1.0.0', ['node', 'script.js'], {
-      CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: 'true',
+      OPERA_DEVTOOLS_NO_USAGE_STATISTICS: 'true',
     });
 
     const toolHandler = new ToolHandler(
@@ -177,7 +177,7 @@ describe('ToolHandler', () => {
     const serverArgs = parseArguments(
       '1.0.0',
       ['node', 'script.js', '--categoryEmulation=false'],
-      {CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: 'true'},
+      {OPERA_DEVTOOLS_NO_USAGE_STATISTICS: 'true'},
     );
 
     const toolHandler = new ToolHandler(

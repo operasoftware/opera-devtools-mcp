@@ -33,14 +33,14 @@ describe('e2e', () => {
     const transport = new StdioClientTransport({
       command: 'node',
       args: [
-        'build/src/bin/chrome-devtools-mcp.js',
+        'build/src/bin/opera-devtools-mcp.js',
         '--headless',
         '--isolated',
         '--executable-path',
         await executablePath(),
         ...extraArgs,
       ],
-      env: {...process.env, CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: 'true'},
+      env: {...process.env, OPERA_DEVTOOLS_NO_USAGE_STATISTICS: 'true'},
     });
     const client = new Client(
       {

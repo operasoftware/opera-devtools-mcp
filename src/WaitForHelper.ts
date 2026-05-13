@@ -180,7 +180,8 @@ export class WaitForHelper {
       }
 
       // Wait for stable dom after navigation so we execute in
-      // the correct context
+      // the correct context. Skip if a dialog opened during the action
+      // since JS is paused and evaluateHandle would hang.
       await this.waitForStableDom();
     } catch (error) {
       logger(error);

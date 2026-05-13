@@ -45,6 +45,11 @@
   - [`get_heapsnapshot_details`](#get_heapsnapshot_details)
   - [`get_heapsnapshot_retainers`](#get_heapsnapshot_retainers)
   - [`get_heapsnapshot_summary`](#get_heapsnapshot_summary)
+- **[Opera](#opera)** (4 tools)
+  - [`opera_chat`](#opera_chat)
+  - [`opera_do`](#opera_do)
+  - [`opera_make`](#opera_make)
+  - [`opera_research`](#opera_research)
 - **[Extensions](#extensions)** (5 tools)
   - [`install_extension`](#install_extension)
   - [`list_extensions`](#list_extensions)
@@ -499,6 +504,49 @@ in the DevTools Elements panel (if any).
 **Parameters:**
 
 - **filePath** (string) **(required)**: A path to a .heapsnapshot file to read.
+
+---
+
+## Opera
+
+### `opera_chat`
+
+**Description:** Send a chat prompt to Opera's built-in AI and return the response. Only available when connected to Opera Neon.
+
+**Parameters:**
+
+- **prompt** (string) **(required)**: The prompt to send to Opera AI.
+
+---
+
+### `opera_do`
+
+**Description:** Instruct Opera's built-in AI to perform an action on the current page and return the result. Only available when connected to Opera Neon.
+
+**Parameters:**
+
+- **prompt** (string) **(required)**: The action to perform, described in natural language.
+
+---
+
+### `opera_make`
+
+**Description:** Ask Opera's built-in AI to create or generate content and return the result. Only available when connected to Opera Neon.
+
+**Parameters:**
+
+- **prompt** (string) **(required)**: Description of what to create or generate.
+
+---
+
+### `opera_research`
+
+**Description:** Ask Opera's built-in AI to research a topic and return a summary. Only available when connected to Opera Neon.
+
+**Parameters:**
+
+- **prompt** (string) **(required)**: The topic or question to research.
+- **researchType** (enum: "local", "one-minute", "deep") _(optional)_: Depth of research. "local" uses only on-page context, "one-minute" performs a quick web search, "deep" performs a thorough multi-source search.
 
 ---
 

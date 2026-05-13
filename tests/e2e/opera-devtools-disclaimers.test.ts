@@ -8,13 +8,9 @@ import assert from 'node:assert';
 import crypto from 'node:crypto';
 import {describe, it, afterEach, beforeEach} from 'node:test';
 
-import {
-  assertDaemonIsNotRunning,
-  assertDaemonIsRunning,
-  runCli,
-} from '../utils.js';
+import {assertDaemonIsNotRunning, runCli} from '../utils.js';
 
-describe('chrome-devtools', () => {
+describe('opera-devtools', () => {
   let sessionId: string;
 
   beforeEach(async () => {
@@ -28,16 +24,16 @@ describe('chrome-devtools', () => {
     await assertDaemonIsNotRunning(sessionId);
   });
 
-  it('reports daemon status correctly', async () => {
-    await assertDaemonIsNotRunning(sessionId);
-
-    const startResult = await runCli(['start'], sessionId);
+  it('forwards disclaimers to stderr on start', async () => {
+    const result = await runCli(['start'], sessionId);
     assert.strictEqual(
-      startResult.status,
+      result.status,
       0,
-      `start command failed: ${startResult.stderr}`,
+      `start command failed: ${result.stderr}`,
     );
-
-    await assertDaemonIsRunning(sessionId);
+    assert(
+      result.stderr.includes('opera-devtools-mcp exposes content'),
+      'Disclaimer not found in stderr on start',
+    );
   });
 });

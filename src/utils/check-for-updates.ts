@@ -2,6 +2,8 @@
  * @license
  * Copyright 2026 Google LLC
  * SPDX-License-Identifier: Apache-2.0
+ *
+ * Modified by Opera Software AS.
  */
 
 import child_process from 'node:child_process';
@@ -10,7 +12,6 @@ import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 
-import {semver} from '../third_party/index.js';
 import {VERSION} from '../version.js';
 
 /**
@@ -25,7 +26,7 @@ export function resetUpdateCheckFlagForTesting() {
 }
 
 export async function checkForUpdates(message: string) {
-  if (isChecking || process.env['CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS']) {
+  if (isChecking || process.env['OPERA_DEVTOOLS_NO_UPDATE_CHECKS']) {
     return;
   }
   isChecking = true;
@@ -33,7 +34,7 @@ export async function checkForUpdates(message: string) {
   const cachePath = path.join(
     os.homedir(),
     '.cache',
-    'chrome-devtools-mcp',
+    'opera-devtools-mcp',
     'latest.json',
   );
 
@@ -47,7 +48,7 @@ export async function checkForUpdates(message: string) {
     // Ignore errors reading cache.
   }
 
-  if (cachedVersion && semver.lt(VERSION, cachedVersion)) {
+  if (cachedVersion && cachedVersion !== VERSION) {
     console.warn(
       `\nUpdate available: ${VERSION} -> ${cachedVersion}\n${message}\n`,
     );

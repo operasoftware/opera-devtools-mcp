@@ -2,6 +2,8 @@
  * @license
  * Copyright 2025 Google LLC
  * SPDX-License-Identifier: Apache-2.0
+ *
+ * Modified by Opera Software AS.
  */
 
 import assert from 'node:assert';
@@ -22,7 +24,7 @@ import type {
 } from 'puppeteer-core';
 import sinon from 'sinon';
 
-import type {ParsedArguments} from '../src/bin/chrome-devtools-mcp-cli-options.js';
+import type {ParsedArguments} from '../src/bin/opera-devtools-mcp-cli-options.js';
 import {McpContext} from '../src/McpContext.js';
 import {McpResponse} from '../src/McpResponse.js';
 import {TextSnapshot} from '../src/TextSnapshot.js';
@@ -354,7 +356,7 @@ export function getMockBrowser(): Browser {
   } as Browser;
 }
 
-export const CLI_PATH = path.resolve('build/src/bin/chrome-devtools.js');
+export const CLI_PATH = path.resolve('build/src/bin/opera-devtools.js');
 
 export async function runCli(
   args: string[],
@@ -387,14 +389,14 @@ export async function assertDaemonIsNotRunning(sessionId?: string) {
   const result = await runCli(['status'], sessionId);
   assert.strictEqual(
     result.stdout,
-    'chrome-devtools-mcp daemon is not running.\n',
+    'opera-devtools-mcp daemon is not running.\n',
   );
 }
 
 export async function assertDaemonIsRunning(sessionId?: string) {
   const result = await runCli(['status'], sessionId);
   assert.ok(
-    result.stdout.startsWith('chrome-devtools-mcp daemon is running.\n'),
-    'chrome-devtools-mcp daemon is not running',
+    result.stdout.startsWith('opera-devtools-mcp daemon is running.\n'),
+    'opera-devtools-mcp daemon is not running',
   );
 }

@@ -2,6 +2,8 @@
  * @license
  * Copyright 2025 Google LLC
  * SPDX-License-Identifier: Apache-2.0
+ *
+ * Modified by Opera Software AS.
  */
 
 import {execSync} from 'node:child_process';
@@ -279,12 +281,15 @@ export async function ensureBrowserLaunched(
   return browser;
 }
 
+export function getCurrentBrowser(): Browser | undefined {
+  return browser;
+}
+
 /**
  * Shutdown hook for the active browser. Closes a launched browser (so the
  * Chrome subprocess is reaped) or disconnects from an attached browser (so
  * the user's Chrome instance stays alive). No-op if no browser is active or
- * the connection has already been dropped. Called from the server entrypoint
- * on stdin EOF / SIGTERM / SIGINT.
+ * the connection has already been dropped.
  */
 export async function closeBrowser(): Promise<void> {
   const b = browser;
