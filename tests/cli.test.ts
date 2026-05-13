@@ -2,12 +2,14 @@
  * @license
  * Copyright 2025 Google LLC
  * SPDX-License-Identifier: Apache-2.0
+ *
+ * Modified by Opera Software AS.
  */
 
 import assert from 'node:assert';
 import {describe, it} from 'node:test';
 
-import {parseArguments} from '../src/bin/chrome-devtools-mcp-cli-options.js';
+import {parseArguments} from '../src/bin/opera-devtools-mcp-cli-options.js';
 
 describe('cli args parsing', () => {
   const defaultArgs = {
@@ -23,10 +25,10 @@ describe('cli args parsing', () => {
     categoryExperimentalThirdParty: false,
     'auto-connect': undefined,
     autoConnect: undefined,
-    'performance-crux': true,
-    performanceCrux: true,
-    'usage-statistics': true,
-    usageStatistics: true,
+    'performance-crux': false,
+    performanceCrux: false,
+    'usage-statistics': false,
+    usageStatistics: false,
     'redact-network-headers': false,
     redactNetworkHeaders: false,
   };
@@ -37,7 +39,7 @@ describe('cli args parsing', () => {
       ...defaultArgs,
       _: [],
       headless: false,
-      $0: 'npx chrome-devtools-mcp@latest',
+      $0: 'npx opera-devtools-mcp@latest',
       channel: 'stable',
     });
   });
@@ -52,7 +54,7 @@ describe('cli args parsing', () => {
       ...defaultArgs,
       _: [],
       headless: false,
-      $0: 'npx chrome-devtools-mcp@latest',
+      $0: 'npx opera-devtools-mcp@latest',
       'browser-url': 'http://localhost:3000',
       browserUrl: 'http://localhost:3000',
       u: 'http://localhost:3000',
@@ -69,7 +71,7 @@ describe('cli args parsing', () => {
       ...defaultArgs,
       _: [],
       headless: false,
-      $0: 'npx chrome-devtools-mcp@latest',
+      $0: 'npx opera-devtools-mcp@latest',
       channel: 'stable',
       'user-data-dir': '/tmp/chrome-profile',
       userDataDir: '/tmp/chrome-profile',
@@ -86,7 +88,7 @@ describe('cli args parsing', () => {
       ...defaultArgs,
       _: [],
       headless: false,
-      $0: 'npx chrome-devtools-mcp@latest',
+      $0: 'npx opera-devtools-mcp@latest',
       'browser-url': undefined,
       browserUrl: undefined,
       u: undefined,
@@ -104,7 +106,7 @@ describe('cli args parsing', () => {
       ...defaultArgs,
       _: [],
       headless: false,
-      $0: 'npx chrome-devtools-mcp@latest',
+      $0: 'npx opera-devtools-mcp@latest',
       'executable-path': '/tmp/test 123/chrome',
       e: '/tmp/test 123/chrome',
       executablePath: '/tmp/test 123/chrome',
@@ -121,7 +123,7 @@ describe('cli args parsing', () => {
       ...defaultArgs,
       _: [],
       headless: false,
-      $0: 'npx chrome-devtools-mcp@latest',
+      $0: 'npx opera-devtools-mcp@latest',
       channel: 'stable',
       viewport: {
         width: 888,
@@ -145,7 +147,7 @@ describe('cli args parsing', () => {
       ...defaultArgs,
       _: [],
       headless: false,
-      $0: 'npx chrome-devtools-mcp@latest',
+      $0: 'npx opera-devtools-mcp@latest',
       channel: 'stable',
       'chrome-arg': ['--no-sandbox', '--disable-setuid-sandbox'],
       chromeArg: ['--no-sandbox', '--disable-setuid-sandbox'],
@@ -167,7 +169,7 @@ describe('cli args parsing', () => {
       ...defaultArgs,
       _: [],
       headless: false,
-      $0: 'npx chrome-devtools-mcp@latest',
+      $0: 'npx opera-devtools-mcp@latest',
       channel: 'stable',
       'ignore-default-chrome-arg': [
         '--disable-extensions',
@@ -195,7 +197,7 @@ describe('cli args parsing', () => {
       ...defaultArgs,
       _: [],
       headless: false,
-      $0: 'npx chrome-devtools-mcp@latest',
+      $0: 'npx opera-devtools-mcp@latest',
       'ws-endpoint': 'ws://127.0.0.1:9222/devtools/browser/abc123',
       wsEndpoint: 'ws://127.0.0.1:9222/devtools/browser/abc123',
       w: 'ws://127.0.0.1:9222/devtools/browser/abc123',
@@ -217,7 +219,7 @@ describe('cli args parsing', () => {
       ...defaultArgs,
       _: [],
       headless: false,
-      $0: 'npx chrome-devtools-mcp@latest',
+      $0: 'npx opera-devtools-mcp@latest',
       'ws-endpoint': 'wss://example.com:9222/devtools/browser/abc123',
       wsEndpoint: 'wss://example.com:9222/devtools/browser/abc123',
       w: 'wss://example.com:9222/devtools/browser/abc123',
@@ -253,7 +255,7 @@ describe('cli args parsing', () => {
       ...defaultArgs,
       _: [],
       headless: false,
-      $0: 'npx chrome-devtools-mcp@latest',
+      $0: 'npx opera-devtools-mcp@latest',
       channel: 'stable',
       'category-emulation': false,
       categoryEmulation: false,
@@ -269,7 +271,7 @@ describe('cli args parsing', () => {
       ...defaultArgs,
       _: [],
       headless: false,
-      $0: 'npx chrome-devtools-mcp@latest',
+      $0: 'npx opera-devtools-mcp@latest',
       channel: 'stable',
       'auto-connect': true,
       autoConnect: true,
@@ -277,9 +279,9 @@ describe('cli args parsing', () => {
   });
 
   it('parses usage statistics flag', async () => {
-    // Test default (should be true).
+    // Default is false (opera opts out of telemetry by default).
     const defaultArgs = parseArguments('1.0.0', ['node', 'main.js'], {});
-    assert.strictEqual(defaultArgs.usageStatistics, true);
+    assert.strictEqual(defaultArgs.usageStatistics, false);
 
     // Test enabling it
     const enabledArgs = parseArguments(
@@ -301,7 +303,7 @@ describe('cli args parsing', () => {
   it('respects env variable', async () => {
     // Test default (should be true).
     const defaultArgs = parseArguments('1.0.0', ['node', 'main.js'], {
-      CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: 'true',
+      OPERA_DEVTOOLS_NO_USAGE_STATISTICS: 'true',
     });
     assert.strictEqual(defaultArgs.usageStatistics, false);
 
@@ -310,7 +312,7 @@ describe('cli args parsing', () => {
       '1.0.0',
       ['node', 'main.js', '--usage-statistics'],
       {
-        CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: 'true',
+        OPERA_DEVTOOLS_NO_USAGE_STATISTICS: 'true',
       },
     );
     assert.strictEqual(enabledArgs.usageStatistics, false);
@@ -320,7 +322,7 @@ describe('cli args parsing', () => {
       '1.0.0',
       ['node', 'main.js', '--no-usage-statistics'],
       {
-        CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: 'true',
+        OPERA_DEVTOOLS_NO_USAGE_STATISTICS: 'true',
       },
     );
     assert.strictEqual(disabledArgs.usageStatistics, false);
@@ -328,7 +330,7 @@ describe('cli args parsing', () => {
 
   it('parses performance crux flag', async () => {
     const defaultArgs = parseArguments('1.0.0', ['node', 'main.js']);
-    assert.strictEqual(defaultArgs.performanceCrux, true);
+    assert.strictEqual(defaultArgs.performanceCrux, false);
 
     // force enable
     const enabledArgs = parseArguments(

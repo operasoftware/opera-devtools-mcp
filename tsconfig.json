@@ -5,8 +5,8 @@
       "ES2023",
       "DOM",
       "ES2024.Promise",
-      "ESNext.Iterator",
-      "ESNext.Collection"
+      "ES2025.Iterator",
+      "ES2025.Collection"
     ],
     "types": ["node", "filesystem"],
     "moduleResolution": "bundler",

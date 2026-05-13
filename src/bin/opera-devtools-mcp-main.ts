@@ -1,0 +1,52 @@
+/**
+ * @license
+ * Copyright 2025 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Modified by Opera Software AS.
+ */
+
+import '../polyfill.js';
+
+import process from 'node:process';
+
+import {createMcpServer, logDisclaimers} from '../index.js';
+import {logger, saveLogsToFile} from '../logger.js';
+import {ClearcutLogger} from '../telemetry/ClearcutLogger.js';
+import {computeFlagUsage} from '../telemetry/flagUtils.js';
+import {StdioServerTransport} from '../third_party/index.js';
+import {checkForUpdates} from '../utils/check-for-updates.js';
+import {VERSION} from '../version.js';
+
+import {cliOptions, parseArguments} from './opera-devtools-mcp-cli-options.js';
+
+await checkForUpdates('Run `npm install opera-devtools-mcp@latest` to update.');
+
+export const args = parseArguments(VERSION);
+
+const logFile = args.logFile ? saveLogsToFile(args.logFile) : undefined;
+// Always disable usage statistics and CrUX data collection.
+if (args.usageStatistics || args.performanceCrux) {
+  console.error(
+    'Warning: usage statistics or CrUX were enabled via flags — forcing off.',
+  );
+}
+args.usageStatistics = false;
+args.performanceCrux = false;
+
+if (process.env['OPERA_DEVTOOLS_CRASH_ON_UNCAUGHT'] !== 'true') {
+  process.on('unhandledRejection', (reason, promise) => {
+    logger('Unhandled promise rejection', promise, reason);
+  });
+}
+
+logger(`Starting Opera DevTools MCP Server v${VERSION}`);
+const {server} = await createMcpServer(args, {
+  logFile,
+});
+const transport = new StdioServerTransport();
+await server.connect(transport);
+logger('Opera DevTools MCP Server connected');
+logDisclaimers(args);
+void ClearcutLogger.get()?.logDailyActiveIfNeeded();
+void ClearcutLogger.get()?.logServerStart(computeFlagUsage(args, cliOptions));
