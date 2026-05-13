@@ -2,11 +2,13 @@
  * @license
  * Copyright 2025 Google LLC
  * SPDX-License-Identifier: Apache-2.0
+ *
+ * Modified by Opera Software AS.
  */
 
 import type {WebMCPTool} from 'puppeteer-core';
 
-import type {ParsedArguments} from './bin/chrome-devtools-mcp-cli-options.js';
+import type {ParsedArguments} from './bin/opera-devtools-mcp-cli-options.js';
 import {ConsoleFormatter} from './formatters/ConsoleFormatter.js';
 import {HeapSnapshotFormatter} from './formatters/HeapSnapshotFormatter.js';
 import {isNodeLike} from './formatters/HeapSnapshotFormatter.js';
@@ -206,9 +208,18 @@ export class McpResponse implements Response {
   #page?: McpPage;
   #redactNetworkHeaders = true;
   #error?: Error;
+  #logCallback?: (message: string) => void;
 
-  constructor(args: ParsedArguments) {
+  constructor(
+    args: ParsedArguments,
+    logCallback?: (message: string) => void,
+  ) {
     this.#args = args;
+    this.#logCallback = logCallback;
+  }
+
+  sendLog(message: string): void {
+    this.#logCallback?.(message);
   }
 
   setPage(page: McpPage): void {

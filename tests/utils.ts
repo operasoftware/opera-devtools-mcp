@@ -2,6 +2,8 @@
  * @license
  * Copyright 2025 Google LLC
  * SPDX-License-Identifier: Apache-2.0
+ *
+ * Modified by Opera Software AS.
  */
 
 import assert from 'node:assert';
@@ -22,7 +24,7 @@ import type {
 } from 'puppeteer-core';
 import sinon from 'sinon';
 
-import type {ParsedArguments} from '../src/bin/chrome-devtools-mcp-cli-options.js';
+import type {ParsedArguments} from '../src/bin/opera-devtools-mcp-cli-options.js';
 import {McpContext} from '../src/McpContext.js';
 import {McpResponse} from '../src/McpResponse.js';
 import {TextSnapshot} from '../src/TextSnapshot.js';

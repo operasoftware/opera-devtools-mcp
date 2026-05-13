@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {zod, ajv, type JSONSchema7} from '../third_party/index.js';
+import {
+  zod,
+  ajv,
+  type JSONSchema7,
+} from '../third_party/index.js';
 
 import {ToolCategory} from './categories.js';
 import {definePageTool} from './ToolDefinition.js';
