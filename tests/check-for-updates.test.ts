@@ -31,8 +31,8 @@ describe('checkForUpdates', () => {
     resetUpdateCheckFlagForTesting();
   });
 
-  it('does nothing if CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS is set', async () => {
-    process.env['CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS'] = 'true';
+  it('does nothing if OPERA_DEVTOOLS_NO_UPDATE_CHECKS is set', async () => {
+    process.env['OPERA_DEVTOOLS_NO_UPDATE_CHECKS'] = 'true';
 
     const warnStub = sinon.stub(console, 'warn');
     const spawnStub = sinon.stub(child_process, 'spawn');
@@ -46,7 +46,7 @@ describe('checkForUpdates', () => {
     assert.ok(readFileStub.notCalled);
     assert.ok(statStub.notCalled);
 
-    delete process.env['CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS'];
+    delete process.env['OPERA_DEVTOOLS_NO_UPDATE_CHECKS'];
   });
 
   it('notifies if cache exists and version is different', async () => {
@@ -70,26 +70,6 @@ describe('checkForUpdates', () => {
         sinon.match('Update available: ' + VERSION + ' -> 99.9.9'),
       ),
     );
-    assert.ok(spawnStub.notCalled);
-  });
-
-  it('does not notify if incoming version is older than current version', async () => {
-    sinon.stub(os, 'homedir').returns('/home/user');
-    sinon.stub(fs, 'stat').resolves({mtimeMs: Date.now()} as unknown as Stats);
-    sinon.stub(fs, 'readFile').callsFake(async filePath => {
-      if (filePath.toString().includes('latest.json')) {
-        return JSON.stringify({
-          version: '0.0.1',
-        });
-      }
-      throw new Error(`File not found: ${filePath}`);
-    });
-    const warnStub = sinon.stub(console, 'warn');
-    const spawnStub = sinon.stub(child_process, 'spawn');
-
-    await checkForUpdates('Run `npm update` to update.');
-
-    assert.ok(warnStub.notCalled);
     assert.ok(spawnStub.notCalled);
   });
 

@@ -2,9 +2,11 @@
  * @license
  * Copyright 2025 Google LLC
  * SPDX-License-Identifier: Apache-2.0
+ *
+ * Modified by Opera Software AS.
  */
 
-import type {ParsedArguments} from '../bin/chrome-devtools-mcp-cli-options.js';
+import type {ParsedArguments} from '../bin/opera-devtools-mcp-cli-options.js';
 import type {AggregatedInfoWithUid} from '../HeapSnapshotManager.js';
 import type {McpPage} from '../McpPage.js';
 import {zod} from '../third_party/index.js';
@@ -63,6 +65,7 @@ export interface ToolDefinition<
 
 export interface Request<Schema extends zod.ZodRawShape> {
   params: zod.objectOutputType<Schema, zod.ZodTypeAny>;
+  signal?: AbortSignal;
 }
 
 export interface ImageContentData {
@@ -102,6 +105,7 @@ export interface DevToolsData {
 }
 
 export interface Response {
+  sendLog(message: string): void;
   appendResponseLine(value: string): void;
   setHeapSnapshotAggregates(
     aggregates: Record<
@@ -271,7 +275,7 @@ export type ContextPage = Readonly<{
     response: Response,
   ): Promise<void>;
   getDevToolsData(): Promise<DevToolsData>;
-}>;
+}>;;
 
 export function defineTool<Schema extends zod.ZodRawShape>(
   definition: ToolDefinition<Schema>,
