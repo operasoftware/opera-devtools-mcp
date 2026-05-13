@@ -1,6 +1,6 @@
 {
   "name": "opera-devtools-mcp",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "description": "Automate Opera browsers, including Opera Neon, and their built-in AI features",
   "mcpServers": {
     "opera-devtools": {
