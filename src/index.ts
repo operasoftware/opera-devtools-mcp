@@ -41,15 +41,6 @@ export async function createMcpServer(
   },
 ) {
   let clearcutLogger: ClearcutLogger | undefined;
-  if (serverArgs.usageStatistics) {
-    clearcutLogger = new ClearcutLogger({
-      logFile: serverArgs.logFile,
-      appVersion: VERSION,
-      clearcutEndpoint: serverArgs.clearcutEndpoint,
-      clearcutForceFlushIntervalMs: serverArgs.clearcutForceFlushIntervalMs,
-      clearcutIncludePidHeader: serverArgs.clearcutIncludePidHeader,
-    });
-  }
 
   const server = new McpServer(
     {
@@ -211,7 +202,7 @@ export async function createMcpServer(
       return;
     }
     if (
-      tool.annotations.category === ToolCategory.IN_PAGE &&
+      tool.annotations.category === ToolCategory.THIRD_PARTY &&
       !serverArgs.categoryInPageTools
     ) {
       return;
@@ -354,6 +345,8 @@ export async function createMcpServer(
         } finally {
           void clearcutLogger?.logToolInvocation({
             toolName: tool.name,
+            params: params as Record<string, unknown>,
+            schema: tool.schema,
             success,
             latencyMs: bucketizeLatency(Date.now() - startTime),
           });

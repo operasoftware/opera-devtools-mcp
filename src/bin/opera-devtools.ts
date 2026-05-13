@@ -110,41 +110,55 @@ y.command(
   },
 ).strict(); // Re-enable strict validation for other commands; this is applied to the yargs instance itself
 
-y.command('status', 'Checks if opera-devtools-mcp is running', async () => {
-  if (isDaemonRunning()) {
-    console.log('opera-devtools-mcp daemon is running.');
-    const response = await sendCommand({
-      method: 'status',
-    });
-    if (response.success) {
-      const data = JSON.parse(response.result) as {
-        pid: number | null;
-        socketPath: string;
-        startDate: string;
-        version: string;
-        args: string[];
-      };
-      console.log(
-        `pid=${data.pid} socket=${data.socketPath} start-date=${data.startDate} version=${data.version}`,
+y.command(
+  'status',
+  'Checks if opera-devtools-mcp is running',
+  y => y,
+  async argv => {
+    if (isDaemonRunning(argv.sessionId)) {
+      console.log('opera-devtools-mcp daemon is running.');
+      const response = await sendCommand(
+        {
+          method: 'status',
+        },
+        argv.sessionId,
       );
-      console.log(`args=${JSON.stringify(data.args)}`);
+      if (response.success) {
+        const data = JSON.parse(response.result) as {
+          pid: number | null;
+          socketPath: string;
+          startDate: string;
+          version: string;
+          args: string[];
+        };
+        console.log(
+          `pid=${data.pid} socket=${data.socketPath} start-date=${data.startDate} version=${data.version}`,
+        );
+        console.log(`args=${JSON.stringify(data.args)}`);
+      } else {
+        console.error('Error:', response.error);
+        process.exit(1);
+      }
     } else {
-      console.error('Error:', response.error);
-      process.exit(1);
+      console.log('opera-devtools-mcp daemon is not running.');
     }
-  } else {
-    console.log('opera-devtools-mcp daemon is not running.');
-  }
-  process.exit(0);
-});
-
-y.command('stop', 'Stop opera-devtools-mcp if any', async () => {
-  if (!isDaemonRunning()) {
     process.exit(0);
-  }
-  await stopDaemon('');
-  process.exit(0);
-});
+  },
+);
+
+y.command(
+  'stop',
+  'Stop opera-devtools-mcp if any',
+  y => y,
+  async argv => {
+    const sessionId = argv.sessionId as string;
+    if (!isDaemonRunning(sessionId)) {
+      process.exit(0);
+    }
+    await stopDaemon(sessionId);
+    process.exit(0);
+  },
+);
 
 for (const [commandName, commandDef] of Object.entries(commands)) {
   const args = commandDef.args;

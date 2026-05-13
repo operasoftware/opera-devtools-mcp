@@ -11,6 +11,7 @@ import path from 'node:path';
 import {describe, it} from 'node:test';
 
 import type {ParsedArguments} from '../../src/bin/opera-devtools-mcp-cli-options.js';
+import {TextSnapshot} from '../../src/TextSnapshot.js';
 import {installExtension} from '../../src/tools/extensions.js';
 import {evaluateScript} from '../../src/tools/script.js';
 import {serverHooks} from '../server.js';

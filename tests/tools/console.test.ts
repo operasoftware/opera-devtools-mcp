@@ -13,7 +13,7 @@ import type {ParsedArguments} from '../../src/bin/opera-devtools-mcp-cli-options
 import {loadIssueDescriptions} from '../../src/issue-descriptions.js';
 import {McpResponse} from '../../src/McpResponse.js';
 import {TextSnapshot} from '../../src/TextSnapshot.js';
-import {DevTools} from '../../src/third_party/index.js';
+import {DevTools, type Dialog} from '../../src/third_party/index.js';
 import {
   getConsoleMessage,
   listConsoleMessages,

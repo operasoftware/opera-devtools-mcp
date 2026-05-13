@@ -118,6 +118,7 @@ export const operaChat = definePageTool({
   name: 'opera_chat',
   description:
     "Send a chat prompt to Opera's built-in AI and return the response. Only available when connected to Opera Neon.",
+  blockedByDialog: false,
   annotations: {
     category: ToolCategory.OPERA,
     readOnlyHint: false,
@@ -147,6 +148,7 @@ export const operaDo = definePageTool({
   name: 'opera_do',
   description:
     "Instruct Opera's built-in AI to perform an action on the current page and return the result. Only available when connected to Opera Neon.",
+  blockedByDialog: false,
   annotations: {
     category: ToolCategory.OPERA,
     readOnlyHint: false,
@@ -183,6 +185,7 @@ export const operaMake = definePageTool({
   name: 'opera_make',
   description:
     "Ask Opera's built-in AI to create or generate content and return the result. Only available when connected to Opera Neon.",
+  blockedByDialog: false,
   annotations: {
     category: ToolCategory.OPERA,
     readOnlyHint: false,
@@ -211,6 +214,7 @@ export const operaResearch = definePageTool({
   name: 'opera_research',
   description:
     "Ask Opera's built-in AI to research a topic and return a summary. Only available when connected to Opera Neon.",
+  blockedByDialog: false,
   annotations: {
     category: ToolCategory.OPERA,
     readOnlyHint: false,
