@@ -2,9 +2,11 @@
  * @license
  * Copyright 2026 Google LLC
  * SPDX-License-Identifier: Apache-2.0
+ *
+ * Modified by Opera Software AS.
  */
 
 // If moved update release-please config
 // x-release-please-start-version
-export const VERSION = '0.26.0';
+export const VERSION = '0.2.2';
 // x-release-please-end

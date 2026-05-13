@@ -2,12 +2,14 @@
  * @license
  * Copyright 2026 Google LLC
  * SPDX-License-Identifier: Apache-2.0
+ *
+ * Modified by Opera Software AS.
  */
 
 import assert from 'node:assert';
 import {describe, it} from 'node:test';
 
-import type {ParsedArguments} from '../../src/bin/chrome-devtools-mcp-cli-options.js';
+import type {ParsedArguments} from '../../src/bin/opera-devtools-mcp-cli-options.js';
 import {serializeArgs} from '../../src/daemon/utils.js';
 import type {YargsOptions} from '../../src/third_party/index.js';
 

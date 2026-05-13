@@ -1,19 +1,19 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.ChromeDevTools/chrome-devtools-mcp",
-  "title": "Chrome DevTools MCP",
-  "description": "MCP server for Chrome DevTools",
+  "name": "io.github.operasoftware/opera-devtools-mcp",
+  "title": "Opera DevTools MCP",
+  "description": "MCP server for Opera DevTools",
   "repository": {
-    "url": "https://github.com/ChromeDevTools/chrome-devtools-mcp",
+    "url": "https://github.com/operasoftware/opera-devtools-mcp",
     "source": "github"
   },
-  "version": "0.26.0",
+  "version": "0.2.2",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
-      "identifier": "chrome-devtools-mcp",
-      "version": "0.26.0",
+      "identifier": "opera-devtools-mcp",
+      "version": "0.2.2",
       "transport": {
         "type": "stdio"
       },

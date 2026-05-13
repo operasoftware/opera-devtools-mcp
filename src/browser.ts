@@ -2,6 +2,8 @@
  * @license
  * Copyright 2025 Google LLC
  * SPDX-License-Identifier: Apache-2.0
+ *
+ * Modified by Opera Software AS.
  */
 
 import {execSync} from 'node:child_process';
@@ -268,6 +270,21 @@ export async function ensureBrowserLaunched(
   }
   browser = await launch(options);
   return browser;
+}
+
+export function getCurrentBrowser(): Browser | undefined {
+  return browser;
+}
+
+export async function closeBrowserIfOpen(): Promise<void> {
+  if (browser?.connected) {
+    try {
+      await browser.close();
+    } catch {
+      // ignore — browser may already be closed
+    }
+  }
+  browser = undefined;
 }
 
 export type Channel = 'stable' | 'canary' | 'beta' | 'dev';
