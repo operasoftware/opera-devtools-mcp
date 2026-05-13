@@ -627,5 +627,45 @@
   {
     "name": "list_3p_developer_tools",
     "args": []
+  },
+  {
+    "name": "opera_chat",
+    "args": [
+      {
+        "name": "prompt_length",
+        "argType": "number"
+      }
+    ]
+  },
+  {
+    "name": "opera_do",
+    "args": [
+      {
+        "name": "prompt_length",
+        "argType": "number"
+      }
+    ]
+  },
+  {
+    "name": "opera_make",
+    "args": [
+      {
+        "name": "prompt_length",
+        "argType": "number"
+      }
+    ]
+  },
+  {
+    "name": "opera_research",
+    "args": [
+      {
+        "name": "prompt_length",
+        "argType": "number"
+      },
+      {
+        "name": "research_type",
+        "argType": "string"
+      }
+    ]
   }
 ]

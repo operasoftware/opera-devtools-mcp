@@ -129,9 +129,13 @@ export class WaitForHelper {
     options?: {timeout?: number; handleDialog?: 'accept' | 'dismiss' | string},
   ): Promise<WaitForEventsResult> {
     let dialogOpened = false;
+    const dialogWatcher = () => {
+      dialogOpened = true;
+    };
+    this.#page.on('dialog', dialogWatcher);
+
     if (options?.handleDialog) {
       const dialogHandler = (dialog: Pick<Dialog, 'accept' | 'dismiss'>) => {
-        dialogOpened = true;
         if (options.handleDialog === 'dismiss') {
           void dialog.dismiss();
         } else if (options.handleDialog === 'accept') {
@@ -145,6 +149,10 @@ export class WaitForHelper {
         this.#page.off('dialog', dialogHandler);
       });
     }
+
+    this.#abortController.signal.addEventListener('abort', () => {
+      this.#page.off('dialog', dialogWatcher);
+    });
 
     const urlBeforeAction = this.#page.url();
     const navigationFinished = this.waitForNavigationStarted()
@@ -175,7 +183,8 @@ export class WaitForHelper {
       }
 
       // Wait for stable dom after navigation so we execute in
-      // the correct context
+      // the correct context. Skip if a dialog opened during the action
+      // since JS is paused and evaluateHandle would hang.
       await this.waitForStableDom();
     } catch (error) {
       logger(error);

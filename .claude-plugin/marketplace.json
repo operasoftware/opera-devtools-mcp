@@ -1,17 +1,17 @@
 {
-  "name": "chrome-devtools-plugins",
-  "version": "0.26.0",
-  "description": "Bundled plugins for actuating and debugging the Chrome browser.",
-  "repository": "https://github.com/ChromeDevTools/chrome-devtools-mcp",
+  "name": "opera-devtools-plugins",
+  "version": "0.2.2",
+  "description": "Bundled plugins for automating Opera browsers, including Opera Neon, and their built-in AI features.",
+  "repository": "https://github.com/operasoftware/opera-devtools-mcp",
   "owner": {
-    "name": "Chrome DevTools Team",
-    "email": "devtools-dev@chromium.org"
+    "name": "Opera Software",
+    "email": "devtools@opera.com"
   },
   "plugins": [
     {
-      "name": "chrome-devtools-mcp",
+      "name": "opera-devtools-mcp",
       "source": "./",
-      "description": "Reliable automation, in-depth debugging, and performance analysis in Chrome using Chrome DevTools and Puppeteer"
+      "description": "Automate Opera browsers, including Opera Neon, and their built-in AI features"
     }
   ]
 }
