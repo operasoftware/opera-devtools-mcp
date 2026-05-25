@@ -129,15 +129,25 @@ export const operaChat = definePageTool({
   },
   schema: {
     prompt: zod.string().describe('The prompt to send to Opera AI.'),
+    model: zod
+      .string()
+      .optional()
+      .describe(
+        'Model ID to use for the chat. Omit to use the browser default. Use opera_list_models to discover available IDs.',
+      ),
   },
   handler: async (request, response) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const session = getCDPSession(request.page.pptrPage as any);
     try {
-      const result = await dispatchAction(session, {
+      const payload: Record<string, unknown> = {
         action: 'chat',
         prompt: request.params.prompt,
-      });
+      };
+      if (request.params.model !== undefined) {
+        payload['model'] = request.params.model;
+      }
+      const result = await dispatchAction(session, payload);
       response.appendResponseLine(result);
     } catch (e) {
       response.appendResponseLine(
