@@ -286,11 +286,11 @@ export const operaListModels = definePageTool({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const session = getCDPSession(request.page.pptrPage as any);
     try {
-      const result = await session.send('Opera.getAvailableModels');
-      response.appendResponseLine(JSON.stringify(result));
+      const result = await dispatchAction(session, {action: 'listModels'});
+      response.appendResponseLine(result);
     } catch (e) {
       response.appendResponseLine(
-        `Opera.getAvailableModels failed with error: ${(e as Error).message}`,
+        `Opera.dispatchAction(listModels) failed with error: ${(e as Error).message}`,
       );
     }
   },
