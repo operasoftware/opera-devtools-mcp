@@ -271,3 +271,27 @@ export const operaResearch = definePageTool({
     }
   },
 });
+
+export const operaListModels = definePageTool({
+  name: 'opera_list_models',
+  description:
+    'List available AI models for Opera chat. Returns model IDs, display names, and which is the default.',
+  blockedByDialog: false,
+  annotations: {
+    category: ToolCategory.OPERA,
+    readOnlyHint: true,
+  },
+  schema: {},
+  handler: async (request, response) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const session = getCDPSession(request.page.pptrPage as any);
+    try {
+      const result = await session.send('Opera.getAvailableModels');
+      response.appendResponseLine(JSON.stringify(result));
+    } catch (e) {
+      response.appendResponseLine(
+        `Opera.getAvailableModels failed with error: ${(e as Error).message}`,
+      );
+    }
+  },
+});
