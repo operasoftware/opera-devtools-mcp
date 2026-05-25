@@ -477,6 +477,13 @@ export const commands: Commands = {
         description: 'The prompt to send to Opera AI.',
         required: true,
       },
+      model: {
+        name: 'model',
+        type: 'string',
+        description:
+          'Model ID to use for the chat. Omit to use the browser default. Use opera_list_models to discover available IDs.',
+        required: false,
+      },
     },
   },
   opera_do: {
@@ -491,6 +498,12 @@ export const commands: Commands = {
         required: true,
       },
     },
+  },
+  opera_list_models: {
+    description:
+      'List available AI models for Opera chat. Returns model IDs, display names, and which is the default.',
+    category: 'Opera',
+    args: {},
   },
   opera_make: {
     description:
