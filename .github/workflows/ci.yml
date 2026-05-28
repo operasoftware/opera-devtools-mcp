@@ -18,4 +18,9 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      - name: Disable AppArmor
+        shell: bash
+        run: echo 0 | sudo tee /proc/sys/kernel/apparmor_restrict_unprivileged_userns
+
       - run: npm test
