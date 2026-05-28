@@ -27,7 +27,7 @@ import {
 } from '../../src/tools/input.js';
 import {parseKey} from '../../src/utils/keyboard.js';
 import {serverHooks} from '../server.js';
-import {html, withMcpContext} from '../utils.js';
+import {html, withMcpContext, getTextContent} from '../utils.js';
 
 describe('input', () => {
   const server = serverHooks();
@@ -148,19 +148,19 @@ describe('input', () => {
         await click.handler(
           {
             params: {
-              uid: '1_1',
+              uid: '1_2',
             },
             page: context.getSelectedMcpPage(),
           },
           response,
           context,
         );
+        const result = await response.handle('click', context);
+        const textContent = getTextContent(result.content[0]);
         const expectedUrl = server.getRoute('/after-click');
         assert.ok(
-          response.responseLines.some(
-            line => line === `Page navigated to ${expectedUrl}.`,
-          ),
-          `Expected response to mention navigation to ${expectedUrl}, got: ${response.responseLines.join(' | ')}`,
+          textContent.includes(`Page navigated to ${expectedUrl}.`),
+          `Expected response to mention navigation to ${expectedUrl}, got: ${textContent}`,
         );
       });
     });
@@ -184,11 +184,11 @@ describe('input', () => {
           response,
           context,
         );
+        const result = await response.handle('click', context);
+        const textContent = getTextContent(result.content[0]);
         assert.ok(
-          !response.responseLines.some(line =>
-            line.startsWith('Page navigated to '),
-          ),
-          `Did not expect a navigation line, got: ${response.responseLines.join(' | ')}`,
+          !textContent.includes('Page navigated to '),
+          `Did not expect a navigation line, got: ${textContent}`,
         );
       });
     });
@@ -772,7 +772,7 @@ describe('input', () => {
         await fill.handler(
           {
             params: {
-              uid: '1_1', // email input
+              uid: '1_2', // email input
               value: 'new@test.com',
             },
             page: context.getSelectedMcpPage(),
@@ -790,7 +790,7 @@ describe('input', () => {
         await fill.handler(
           {
             params: {
-              uid: '1_2', // password input
+              uid: '1_3', // password input
               value: 'secret',
             },
             page: context.getSelectedMcpPage(),
@@ -1087,11 +1087,11 @@ describe('input', () => {
             params: {
               elements: [
                 {
-                  uid: '1_2',
+                  uid: '1_3',
                   value: 'test',
                 },
                 {
-                  uid: '1_4',
+                  uid: '1_5',
                   value: 'test2',
                 },
               ],
@@ -1193,7 +1193,7 @@ describe('input', () => {
         await uploadFile.handler(
           {
             params: {
-              uid: '1_1',
+              uid: '1_2',
               filePath: testFilePath,
             },
             page: context.getSelectedMcpPage(),

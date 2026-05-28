@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.2](https://github.com/operasoftware/opera-devtools-mcp/compare/opera-devtools-mcp-v0.2.0...opera-devtools-mcp-v0.2.2) (2026-05-28)
+
+### Upstream intake
+
+Rebased onto [chrome-devtools-mcp 1.1.1](https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/main/CHANGELOG.md) (from 0.26.0). See upstream changelog for the full list of upstream changes.
+
 ## [0.2.0](https://github.com/operasoftware/opera-devtools-mcp/compare/opera-devtools-mcp-v0.1.1...opera-devtools-mcp-v0.2.0) (2026-05-13)
 
 ### Upstream intake

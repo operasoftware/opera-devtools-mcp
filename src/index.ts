@@ -11,7 +11,7 @@ import type fs from 'node:fs';
 import type {parseArguments} from './bin/opera-devtools-mcp-cli-options.js';
 import type {Channel} from './browser.js';
 import {
-  closeBrowserIfOpen,
+  closeBrowser,
   ensureBrowserConnected,
   ensureBrowserLaunched,
   getCurrentBrowser,
@@ -145,15 +145,14 @@ export async function createMcpServer(
     context?.dispose();
     context = undefined;
     browserHasOperaFlags = false;
-    await closeBrowserIfOpen();
-    // getContext() will relaunch without --disable-blink-features=AutomationControlled
+    await closeBrowser();
   }
 
   async function restartBrowserForOpera(): Promise<void> {
     context?.dispose();
     context = undefined;
     browserHasOperaFlags = false;
-    await closeBrowserIfOpen();
+    await closeBrowser();
     const chromeArgs: string[] = [
       '--disable-blink-features=AutomationControlled',
       ...(serverArgs.chromeArg ?? []).map(String),

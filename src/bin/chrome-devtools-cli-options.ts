@@ -112,7 +112,7 @@ export const commands: Commands = {
         name: 'geolocation',
         type: 'string',
         description:
-          'Geolocation (`<latitude>x<longitude>`) to emulate. Latitude between -90 and 90. Longitude between -180 and 180. Omit to clear the geolocation override.',
+          'Geolocation (`<latitude>,<longitude>`) to emulate. Latitude between -90 and 90. Longitude between -180 and 180. Omit to clear the geolocation override.',
         required: false,
       },
       userAgent: {
@@ -137,6 +137,13 @@ export const commands: Commands = {
           "Emulate device viewports '<width>x<height>x<devicePixelRatio>[,mobile][,touch][,landscape]'. 'touch' and 'mobile' to emulate mobile devices. 'landscape' to emulate landscape mode.",
         required: false,
       },
+      extraHttpHeaders: {
+        name: 'extraHttpHeaders',
+        type: 'string',
+        description:
+          'Extra HTTP headers as a JSON string object, e.g. {"X-Custom": "value", "Authorization": "Bearer token"}. Headers are included into every HTTP request originating from the page and persist across navigations until cleared. Pass an empty string to clear all extra headers.',
+        required: false,
+      },
     },
   },
   evaluate_script: {
@@ -155,6 +162,13 @@ export const commands: Commands = {
         name: 'args',
         type: 'array',
         description: 'An optional list of arguments to pass to the function.',
+        required: false,
+      },
+      filePath: {
+        name: 'filePath',
+        type: 'string',
+        description:
+          'The absolute or relative path to a file to save the script output to. If omitted, the output is returned inline.',
         required: false,
       },
       dialogAction: {
@@ -204,6 +218,106 @@ export const commands: Commands = {
         type: 'number',
         description:
           'The msgid of a console message on the page from the listed console messages',
+        required: true,
+      },
+    },
+  },
+  get_heapsnapshot_class_nodes: {
+    description:
+      'Loads a memory heapsnapshot and returns instances of a specific class with their IDs. (requires flag: --experimentalMemory=true)',
+    category: 'Memory',
+    args: {
+      filePath: {
+        name: 'filePath',
+        type: 'string',
+        description: 'A path to a .heapsnapshot file to read.',
+        required: true,
+      },
+      id: {
+        name: 'id',
+        type: 'number',
+        description: 'The ID for the class, obtained from details.',
+        required: true,
+      },
+      pageIdx: {
+        name: 'pageIdx',
+        type: 'number',
+        description: 'The page index for pagination.',
+        required: false,
+      },
+      pageSize: {
+        name: 'pageSize',
+        type: 'number',
+        description: 'The page size for pagination.',
+        required: false,
+      },
+    },
+  },
+  get_heapsnapshot_details: {
+    description:
+      'Loads a memory heapsnapshot and returns all available information including statistics, static data, and aggregated node information. Supports pagination for aggregates. (requires flag: --experimentalMemory=true)',
+    category: 'Memory',
+    args: {
+      filePath: {
+        name: 'filePath',
+        type: 'string',
+        description: 'A path to a .heapsnapshot file to read.',
+        required: true,
+      },
+      pageIdx: {
+        name: 'pageIdx',
+        type: 'number',
+        description: 'The page index for pagination of aggregates.',
+        required: false,
+      },
+      pageSize: {
+        name: 'pageSize',
+        type: 'number',
+        description: 'The page size for pagination of aggregates.',
+        required: false,
+      },
+    },
+  },
+  get_heapsnapshot_retainers: {
+    description:
+      'Loads a memory heapsnapshot and returns retainers for a specific node ID. (requires flag: --experimentalMemory=true)',
+    category: 'Memory',
+    args: {
+      filePath: {
+        name: 'filePath',
+        type: 'string',
+        description: 'A path to a .heapsnapshot file to read.',
+        required: true,
+      },
+      nodeId: {
+        name: 'nodeId',
+        type: 'number',
+        description: 'The node ID to get retainers for.',
+        required: true,
+      },
+      pageIdx: {
+        name: 'pageIdx',
+        type: 'number',
+        description: 'The page index for pagination.',
+        required: false,
+      },
+      pageSize: {
+        name: 'pageSize',
+        type: 'number',
+        description: 'The page size for pagination.',
+        required: false,
+      },
+    },
+  },
+  get_heapsnapshot_summary: {
+    description:
+      'Loads a memory heapsnapshot and returns snapshot summary stats. (requires flag: --experimentalMemory=true)',
+    category: 'Memory',
+    args: {
+      filePath: {
+        name: 'filePath',
+        type: 'string',
+        description: 'A path to a .heapsnapshot file to read.',
         required: true,
       },
     },
@@ -381,6 +495,12 @@ export const commands: Commands = {
   list_pages: {
     description: 'Get a list of pages open in the browser.',
     category: 'Navigation automation',
+    args: {},
+  },
+  list_webmcp_tools: {
+    description:
+      'Lists all WebMCP tools the page exposes. (requires flag: --categoryExperimentalWebmcp=true)',
+    category: 'WebMCP',
     args: {},
   },
   navigate_page: {
@@ -650,7 +770,7 @@ export const commands: Commands = {
       },
     },
   },
-  take_memory_snapshot: {
+  take_heapsnapshot: {
     description:
       'Capture a heap snapshot of the currently selected page. Use to analyze the memory distribution of JavaScript objects and debug memory leaks.',
     category: 'Memory',
