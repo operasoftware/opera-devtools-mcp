@@ -23,7 +23,6 @@ jobs:
         node:
           - 20
           - 22
-          - 23
           - 24
     steps:
       - name: Check out repository
