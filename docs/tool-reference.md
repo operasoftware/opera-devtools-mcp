@@ -517,7 +517,7 @@ in the DevTools Elements panel (if any).
 
 ### `opera_list_models`
 
-**Description:** List available AI models for Opera chat. Returns model IDs, display names, and which is the default. Only available when connected to Opera Neon.,
+**Description:** List available AI models for Opera chat. Returns model IDs, display names, and which is the default. Only available when connected to Opera Neon.
 
 **Parameters:** None
 
