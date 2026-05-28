@@ -634,6 +634,10 @@
       {
         "name": "prompt_length",
         "argType": "number"
+      },
+      {
+        "name": "model_length",
+        "argType": "number"
       }
     ]
   },
@@ -667,5 +671,9 @@
         "argType": "string"
       }
     ]
+  },
+  {
+    "name": "opera_list_models",
+    "args": []
   }
 ]
