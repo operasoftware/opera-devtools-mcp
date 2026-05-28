@@ -20,7 +20,7 @@ const getCDPSession = (page: {_client(): CDPSession}): CDPSession =>
   page._client();
 
 const MAX_SW_RETRIES = 5;
-const SW_RETRY_DELAY_MS = 1000;
+const SW_RETRY_DELAY_MS = 2500;
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
