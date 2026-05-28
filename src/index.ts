@@ -23,7 +23,7 @@ import {McpResponse} from './McpResponse.js';
 import {Mutex} from './Mutex.js';
 import {SlimMcpResponse} from './SlimMcpResponse.js';
 import type {ClearcutLogger} from './telemetry/ClearcutLogger.js';
-import {bucketizeLatency} from './telemetry/metricUtils.js';
+import {bucketizeLatency} from './telemetry/transformation.js';
 import {
   McpServer,
   type CallToolResult,
