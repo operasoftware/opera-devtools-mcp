@@ -501,7 +501,7 @@ export const commands: Commands = {
   },
   opera_list_models: {
     description:
-      'List available AI models for Opera chat. Returns model IDs, display names, and which is the default.',
+      'List available AI models for Opera chat. Returns model IDs, display names, and which is the default. Only available when connected to Opera Neon.',
     category: 'Opera',
     args: {},
   },
