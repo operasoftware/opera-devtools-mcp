@@ -16,6 +16,9 @@ export class WaitForHelper {
   #expectNavigationIn: number;
   #navigationTimeout: number;
 
+  #dialogOpened = false;
+  #initialUrl: string;
+
   constructor(
     page: Page,
     cpuTimeoutMultiplier: number,
@@ -26,6 +29,7 @@ export class WaitForHelper {
     this.#expectNavigationIn = 100 * cpuTimeoutMultiplier;
     this.#navigationTimeout = 3000 * networkTimeoutMultiplier;
     this.#page = page as unknown as CdpPage;
+    this.#initialUrl = page.url();
   }
 
   /**
@@ -128,14 +132,12 @@ export class WaitForHelper {
     action: () => Promise<unknown>,
     options?: {timeout?: number; handleDialog?: 'accept' | 'dismiss' | string},
   ): Promise<WaitForEventsResult> {
-    let dialogOpened = false;
-    const dialogWatcher = () => {
-      dialogOpened = true;
-    };
-    this.#page.on('dialog', dialogWatcher);
-
+    if (this.#abortController.signal.aborted) {
+      throw new Error("Can't re-use a WaitForHelper");
+    }
     if (options?.handleDialog) {
       const dialogHandler = (dialog: Pick<Dialog, 'accept' | 'dismiss'>) => {
+        this.#dialogOpened = true;
         if (options.handleDialog === 'dismiss') {
           void dialog.dismiss();
         } else if (options.handleDialog === 'accept') {
@@ -150,11 +152,6 @@ export class WaitForHelper {
       });
     }
 
-    this.#abortController.signal.addEventListener('abort', () => {
-      this.#page.off('dialog', dialogWatcher);
-    });
-
-    const urlBeforeAction = this.#page.url();
     const navigationFinished = this.waitForNavigationStarted()
       .then(navigationStated => {
         if (navigationStated) {
@@ -178,8 +175,8 @@ export class WaitForHelper {
     try {
       await navigationFinished;
 
-      if (dialogOpened) {
-        return {};
+      if (this.#dialogOpened) {
+        return this.#getResult();
       }
 
       // Wait for stable dom after navigation so we execute in
@@ -192,9 +189,13 @@ export class WaitForHelper {
       this.#abortController.abort();
     }
 
+    return this.#getResult();
+  }
+
+  #getResult(): WaitForEventsResult {
     const urlAfterAction = this.#page.url();
     return {
-      ...(urlAfterAction !== urlBeforeAction
+      ...(urlAfterAction !== this.#initialUrl
         ? {navigatedToUrl: urlAfterAction}
         : {}),
     };
@@ -207,15 +208,6 @@ export interface WaitForEventsResult {
    * occurred.
    */
   navigatedToUrl?: string;
-}
-
-export function appendWaitForResult(
-  response: {appendResponseLine(value: string): void},
-  result: WaitForEventsResult,
-): void {
-  if (result.navigatedToUrl) {
-    response.appendResponseLine(`Page navigated to ${result.navigatedToUrl}.`);
-  }
 }
 
 export function getNetworkMultiplierFromString(

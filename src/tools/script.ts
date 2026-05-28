@@ -7,7 +7,6 @@
 import {zod} from '../third_party/index.js';
 import type {Frame, JSHandle, Page, WebWorker} from '../third_party/index.js';
 import type {ExtensionServiceWorker} from '../types.js';
-import {appendWaitForResult} from '../WaitForHelper.js';
 
 import {ToolCategory} from './categories.js';
 import type {Context, Response} from './ToolDefinition.js';
@@ -25,6 +24,7 @@ so returned values have to be JSON-serializable.`,
       readOnlyHint: false,
     },
     schema: {
+      ...(cliArgs?.experimentalPageIdRouting ? pageIdSchema : {}),
       function: zod.string().describe(
         `A JavaScript function declaration to be executed by the tool in the currently selected page.
 Example without arguments: \`() => {
@@ -47,13 +47,18 @@ Example with arguments: \`(el) => {
         )
         .optional()
         .describe(`An optional list of arguments to pass to the function.`),
+      filePath: zod
+        .string()
+        .optional()
+        .describe(
+          'The absolute or relative path to a file to save the script output to. If omitted, the output is returned inline.',
+        ),
       dialogAction: zod
         .string()
         .optional()
         .describe(
           'Handle dialogs while execution. "accept", "dismiss", or string for response of window.prompt. Defaults to accept.',
         ),
-      ...(cliArgs?.experimentalPageIdRouting ? pageIdSchema : {}),
       ...(cliArgs?.categoryExtensions
         ? {
             serviceWorkerId: zod
@@ -73,7 +78,10 @@ Example with arguments: \`(el) => {
         function: fnString,
         pageId,
         dialogAction,
+        filePath,
       } = request.params;
+
+      await context.validatePath(filePath);
 
       if (cliArgs?.categoryExtensions && serviceWorkerId) {
         if (uidArgs && uidArgs.length > 0) {
@@ -90,11 +98,14 @@ Example with arguments: \`(el) => {
           .getSelectedMcpPage()
           .waitForEventsAfterAction(
             async () => {
-              await performEvaluation(worker, fnString, [], response);
+              await performEvaluation(worker, fnString, [], response, {
+                filePath,
+                context,
+              });
             },
             {handleDialog: dialogAction ?? 'accept'},
           );
-        appendWaitForResult(response, result);
+        response.attachWaitForResult(result);
         return;
       }
 
@@ -116,11 +127,14 @@ Example with arguments: \`(el) => {
 
         const result = await mcpPage.waitForEventsAfterAction(
           async () => {
-            await performEvaluation(evaluatable, fnString, args, response);
+            await performEvaluation(evaluatable, fnString, args, response, {
+              filePath,
+              context,
+            });
           },
           {handleDialog: dialogAction ?? 'accept'},
         );
-        appendWaitForResult(response, result);
+        response.attachWaitForResult(result);
       } finally {
         void Promise.allSettled(args.map(arg => arg.dispose()));
       }
@@ -133,6 +147,7 @@ const performEvaluation = async (
   fnString: string,
   args: Array<JSHandle<unknown>>,
   response: Response,
+  options?: {filePath: string; context: Context},
 ) => {
   const fn = await evaluatable.evaluateHandle(`(${fnString})`);
   try {
@@ -144,10 +159,22 @@ const performEvaluation = async (
       fn,
       ...args,
     );
-    response.appendResponseLine('Script ran on page and returned:');
-    response.appendResponseLine('```json');
-    response.appendResponseLine(`${result}`);
-    response.appendResponseLine('```');
+    if (options?.filePath) {
+      const data = new TextEncoder().encode(result ?? 'undefined');
+      const {filename} = await options.context.saveFile(
+        data,
+        options.filePath,
+        '.json',
+      );
+      response.appendResponseLine(
+        `Script ran on page. Output saved to ${filename}.`,
+      );
+    } else {
+      response.appendResponseLine('Script ran on page and returned:');
+      response.appendResponseLine('```json');
+      response.appendResponseLine(`${result}`);
+      response.appendResponseLine('```');
+    }
   } finally {
     void fn.dispose();
   }

@@ -11,7 +11,7 @@ import type {WebMCPTool} from 'puppeteer-core';
 import type {ParsedArguments} from './bin/opera-devtools-mcp-cli-options.js';
 import {ConsoleFormatter} from './formatters/ConsoleFormatter.js';
 import {HeapSnapshotFormatter} from './formatters/HeapSnapshotFormatter.js';
-import {isNodeLike} from './formatters/HeapSnapshotFormatter.js';
+import {isEdgeLike, isNodeLike} from './formatters/HeapSnapshotFormatter.js';
 import {IssueFormatter} from './formatters/IssueFormatter.js';
 import {NetworkFormatter} from './formatters/NetworkFormatter.js';
 import {SnapshotFormatter} from './formatters/SnapshotFormatter.js';
@@ -42,6 +42,7 @@ import type {InsightName, TraceResult} from './trace-processing/parse.js';
 import {getInsightOutput, getTraceSummary} from './trace-processing/parse.js';
 import {paginate} from './utils/pagination.js';
 import type {PaginationOptions} from './utils/types.js';
+import type {WaitForEventsResult} from './WaitForHelper.js';
 
 interface TraceInsightData {
   trace: TraceResult;
@@ -208,7 +209,12 @@ export class McpResponse implements Response {
   #page?: McpPage;
   #redactNetworkHeaders = true;
   #error?: Error;
+  #attachedWaitForResult?: WaitForEventsResult;
   #logCallback?: (message: string) => void;
+
+  get #deviceScope(): DevTools.CrUXManager.DeviceScope {
+    return this.#page?.viewport?.isMobile ? 'PHONE' : 'DESKTOP';
+  }
 
   constructor(args: ParsedArguments, logCallback?: (message: string) => void) {
     this.#args = args;
@@ -394,6 +400,10 @@ export class McpResponse implements Response {
 
   appendResponseLine(value: string): void {
     this.#textResponseLines.push(value);
+  }
+
+  attachWaitForResult(result: WaitForEventsResult): void {
+    this.#attachedWaitForResult = result;
   }
 
   setHeapSnapshotAggregates(
@@ -747,12 +757,24 @@ export class McpResponse implements Response {
       extensionServiceWorkers?: object[];
       extensionPages?: object[];
       errorMessage?: string;
+      navigatedToUrl?: string;
+      geolocation?: {latitude: number; longitude: number};
     } = {};
 
     const response = [];
     if (this.#textResponseLines.length) {
       structuredContent.message = this.#textResponseLines.join('\n');
       response.push(...this.#textResponseLines);
+    }
+
+    if (this.#attachedWaitForResult) {
+      if (this.#attachedWaitForResult.navigatedToUrl) {
+        response.push(
+          `Page navigated to ${this.#attachedWaitForResult.navigatedToUrl}.`,
+        );
+        structuredContent.navigatedToUrl =
+          this.#attachedWaitForResult.navigatedToUrl;
+      }
     }
 
     const networkConditions = this.#page?.networkConditions;
@@ -762,6 +784,14 @@ export class McpResponse implements Response {
       response.push(`Default navigation timeout set to ${timeout} ms`);
       structuredContent.networkConditions = networkConditions;
       structuredContent.navigationTimeout = timeout;
+    }
+
+    const geolocation = this.#page?.geolocation;
+    if (geolocation) {
+      response.push(
+        `Emulating geolocation: latitude=${geolocation.latitude}, longitude=${geolocation.longitude}`,
+      );
+      structuredContent.geolocation = geolocation;
     }
 
     const viewport = this.#page?.viewport;
@@ -880,7 +910,7 @@ Call ${handleDialog.name} to handle it before continuing.`);
     }
 
     if (data.traceSummary) {
-      const summary = getTraceSummary(data.traceSummary);
+      const summary = getTraceSummary(data.traceSummary, this.#deviceScope);
       response.push(summary);
       structuredContent.traceSummary = summary;
       structuredContent.traceInsights = [];
@@ -899,6 +929,7 @@ Call ${handleDialog.name} to handle it before continuing.`);
         data.traceInsight.trace,
         data.traceInsight.insightSetId,
         data.traceInsight.insightName,
+        this.#deviceScope,
       );
       if ('error' in insightOutput) {
         response.push(insightOutput.error);
@@ -975,12 +1006,20 @@ Call ${handleDialog.name} to handle it before continuing.`);
       }
       const nodes = this.#heapSnapshotOptions.nodes;
       if (nodes) {
-        const sortedItems = nodes.items
-          .filter(isNodeLike)
-          .sort((a, b) => b.retainedSize - a.retainedSize);
+        let items = Array.from(nodes.items);
+        const firstItem = nodes.items[0];
+        if (firstItem) {
+          if (isNodeLike(firstItem)) {
+            items = items
+              .filter(isNodeLike)
+              .sort((a, b) => b.retainedSize - a.retainedSize);
+          } else if (isEdgeLike(firstItem)) {
+            items = items.filter(isEdgeLike);
+          }
+        }
 
         const paginationData = this.#dataWithPagination(
-          sortedItems,
+          items,
           this.#heapSnapshotOptions.pagination,
         );
 

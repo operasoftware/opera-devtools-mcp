@@ -150,7 +150,7 @@ export const cliOptions = {
   experimentalPageIdRouting: {
     type: 'boolean',
     describe:
-      'Whether to expose pageId on page-scoped tools and route requests by page ID.',
+      'Whether to expose pageId on page-scoped tools and route requests by page ID (useful for concurrent agent sessions).',
     hidden: true,
   },
   experimentalDevtools: {
@@ -284,7 +284,7 @@ export const cliOptions = {
   redactNetworkHeaders: {
     type: 'boolean',
     describe:
-      'If true, redacts some of the network headers considered senstive before returning to the client.',
+      'If true, redacts some of the network headers considered sensitive before returning to the client.',
     default: false,
   },
 } satisfies Record<string, YargsOptions>;

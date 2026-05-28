@@ -11,12 +11,12 @@ import {
   applyToExistingMetrics,
   generateToolMetrics,
   validateEnumHomogeneity,
-} from '../../src/telemetry/toolMetricsUtils.js';
+} from '../../src/telemetry/metricsRegistry.js';
 import {zod} from '../../src/third_party/index.js';
 import {ToolCategory} from '../../src/tools/categories.js';
 import type {ToolDefinition} from '../../src/tools/ToolDefinition.js';
 
-describe('toolMetricsUtils', () => {
+describe('metricsRegistry', () => {
   describe('validateEnumHomogeneity', () => {
     it('should return the primitive type of a homogeneous enum', () => {
       const result = validateEnumHomogeneity(['a', 'b', 'c']);
@@ -81,6 +81,26 @@ describe('toolMetricsUtils', () => {
       assert.strictEqual(metrics.length, 1);
       assert.strictEqual(metrics[0].args[0].name, 'arg_enum');
       assert.strictEqual(metrics[0].args[0].argType, 'string');
+    });
+
+    it('should sanitize tool names containing underscores before numbers', () => {
+      const mockTool: ToolDefinition = {
+        name: 'list_3p_developer_tools',
+        description: 'test description',
+        annotations: {
+          category: ToolCategory.THIRD_PARTY,
+          readOnlyHint: true,
+        },
+        schema: {},
+        blockedByDialog: false,
+        handler: async () => {
+          // no-op
+        },
+      };
+
+      const metrics = generateToolMetrics([mockTool]);
+      assert.strictEqual(metrics.length, 1);
+      assert.strictEqual(metrics[0].name, 'list3p_developer_tools');
     });
   });
 

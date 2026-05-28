@@ -48,7 +48,7 @@ experience data. To disable this, run with the `--no-performance-crux` flag.
 
 ## Requirements
 
-- [Node.js](https://nodejs.org/) v20.19 or a newer [latest maintenance LTS](https://github.com/nodejs/Release#release-schedule) version.
+- [Node.js](https://nodejs.org/) [LTS](https://github.com/nodejs/Release#release-schedule) version.
 - A Chromium-based browser (Chrome or Opera Neon).
 - [npm](https://www.npmjs.com/)
 
@@ -192,11 +192,12 @@ If you run into any issues, checkout our [troubleshooting guide](./docs/troubles
   - [`take_snapshot`](docs/tool-reference.md#take_snapshot)
   - [`screencast_start`](docs/tool-reference.md#screencast_start)
   - [`screencast_stop`](docs/tool-reference.md#screencast_stop)
-- **Memory** (4 tools)
-  - [`take_memory_snapshot`](docs/tool-reference.md#take_memory_snapshot)
-  - [`get_memory_snapshot_details`](docs/tool-reference.md#get_memory_snapshot_details)
-  - [`get_nodes_by_class`](docs/tool-reference.md#get_nodes_by_class)
-  - [`load_memory_snapshot`](docs/tool-reference.md#load_memory_snapshot)
+- **Memory** (5 tools)
+  - [`take_heapsnapshot`](docs/tool-reference.md#take_heapsnapshot)
+  - [`get_heapsnapshot_class_nodes`](docs/tool-reference.md#get_heapsnapshot_class_nodes)
+  - [`get_heapsnapshot_details`](docs/tool-reference.md#get_heapsnapshot_details)
+  - [`get_heapsnapshot_retainers`](docs/tool-reference.md#get_heapsnapshot_retainers)
+  - [`get_heapsnapshot_summary`](docs/tool-reference.md#get_heapsnapshot_summary)
 - **Opera** (4 tools)
   - [`opera_chat`](docs/tool-reference.md#opera_chat)
   - [`opera_do`](docs/tool-reference.md#opera_do)
@@ -278,8 +279,28 @@ The Opera DevTools MCP server supports the following configuration options:
   If enabled, ignores errors relative to self-signed and expired certificates. Use with caution.
   - **Type:** boolean
 
+- **`--experimentalPageIdRouting`/ `--experimental-page-id-routing`**
+  Whether to expose pageId on page-scoped tools and route requests by page ID (useful for concurrent agent sessions).
+  - **Type:** boolean
+
+- **`--experimentalDevtools`/ `--experimental-devtools`**
+  Whether to enable automation over DevTools targets
+  - **Type:** boolean
+
 - **`--experimentalVision`/ `--experimental-vision`**
   Whether to enable coordinate-based tools such as click_at(x,y). Usually requires a computer-use model able to produce accurate coordinates by looking at screenshots.
+  - **Type:** boolean
+
+- **`--experimentalMemory`/ `--experimental-memory`**
+  Whether to enable experimental memory tools.
+  - **Type:** boolean
+
+- **`--experimentalStructuredContent`/ `--experimental-structured-content`**
+  Whether to output structured formatted content.
+  - **Type:** boolean
+
+- **`--experimentalIncludeAllPages`/ `--experimental-include-all-pages`**
+  Whether to include all kinds of pages such as webviews or background pages as pages.
   - **Type:** boolean
 
 - **`--experimentalScreencast`/ `--experimental-screencast`**
@@ -342,7 +363,7 @@ The Opera DevTools MCP server supports the following configuration options:
   - **Type:** boolean
 
 - **`--redactNetworkHeaders`/ `--redact-network-headers`**
-  If true, redacts some of the network headers considered senstive before returning to the client.
+  If true, redacts some of the network headers considered sensitive before returning to the client.
   - **Type:** boolean
   - **Default:** `false`
 
@@ -383,6 +404,34 @@ Pass them via the `args` property in the JSON configuration. For example:
 ```
 
 ## Concepts
+
+### Concurrent sessions
+
+Most MCP clients start one Chrome DevTools MCP server per conversation. If your
+client shares a single server instance across concurrent agents or subagents,
+start the server with `--experimentalPageIdRouting`. This exposes `pageId` on
+page-scoped tools so each agent can route tool calls to the tab it is working
+with.
+
+```json
+{
+  "mcpServers": {
+    "chrome-devtools": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "chrome-devtools-mcp@latest",
+        "--experimentalPageIdRouting"
+      ]
+    }
+  }
+}
+```
+
+If you run multiple independent MCP client sessions and want each session to
+launch its own temporary Chrome profile, also pass `--isolated`. This avoids
+sharing the default Chrome DevTools MCP user data directory between those
+server instances.
 
 ### User data directory
 

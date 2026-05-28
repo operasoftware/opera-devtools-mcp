@@ -14,7 +14,7 @@ import {
   applyToExistingMetrics,
   generateToolMetrics,
   type ToolMetric,
-} from '../build/src/telemetry/toolMetricsUtils.js';
+} from '../build/src/telemetry/metricsRegistry.js';
 import type {ToolDefinition} from '../build/src/tools/ToolDefinition.js';
 import {createTools} from '../build/src/tools/tools.js';
 
