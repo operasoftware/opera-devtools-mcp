@@ -44,9 +44,10 @@
   - [`get_memory_snapshot_details`](#get_memory_snapshot_details)
   - [`get_nodes_by_class`](#get_nodes_by_class)
   - [`load_memory_snapshot`](#load_memory_snapshot)
-- **[Opera](#opera)** (4 tools)
+- **[Opera](#opera)** (5 tools)
   - [`opera_chat`](#opera_chat)
   - [`opera_do`](#opera_do)
+  - [`opera_list_models`](#opera_list_models)
   - [`opera_make`](#opera_make)
   - [`opera_research`](#opera_research)
 - **[Extensions](#extensions)** (5 tools)
@@ -500,6 +501,7 @@ in the DevTools Elements panel (if any).
 **Parameters:**
 
 - **prompt** (string) **(required)**: The prompt to send to Opera AI.
+- **model** (string) _(optional)_: Model ID to use for the chat. Omit to use the browser default. Use [`opera_list_models`](#opera_list_models) to discover available IDs.
 
 ---
 
@@ -510,6 +512,14 @@ in the DevTools Elements panel (if any).
 **Parameters:**
 
 - **prompt** (string) **(required)**: The action to perform, described in natural language.
+
+---
+
+### `opera_list_models`
+
+**Description:** List available AI models for Opera chat. Returns model IDs, display names, and which is the default. Only available when connected to Opera Neon.
+
+**Parameters:** None
 
 ---
 

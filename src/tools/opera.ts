@@ -20,7 +20,7 @@ const getCDPSession = (page: {_client(): CDPSession}): CDPSession =>
   page._client();
 
 const MAX_SW_RETRIES = 5;
-const SW_RETRY_DELAY_MS = 1000;
+const SW_RETRY_DELAY_MS = 2500;
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -129,15 +129,25 @@ export const operaChat = definePageTool({
   },
   schema: {
     prompt: zod.string().describe('The prompt to send to Opera AI.'),
+    model: zod
+      .string()
+      .optional()
+      .describe(
+        'Model ID to use for the chat. Omit to use the browser default. Use opera_list_models to discover available IDs.',
+      ),
   },
   handler: async (request, response) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const session = getCDPSession(request.page.pptrPage as any);
     try {
-      const result = await dispatchAction(session, {
+      const payload: Record<string, unknown> = {
         action: 'chat',
         prompt: request.params.prompt,
-      });
+      };
+      if (request.params.model !== undefined) {
+        payload['model'] = request.params.model;
+      }
+      const result = await dispatchAction(session, payload);
       response.appendResponseLine(result);
     } catch (e) {
       response.appendResponseLine(
@@ -257,6 +267,30 @@ export const operaResearch = definePageTool({
       }
       response.appendResponseLine(
         `Opera.dispatchWithStreamedResponse(research) failed with error: ${(e as Error).message}`,
+      );
+    }
+  },
+});
+
+export const operaListModels = definePageTool({
+  name: 'opera_list_models',
+  description:
+    'List available AI models for Opera chat. Returns model IDs, display names, and which is the default. Only available when connected to Opera Neon.',
+  blockedByDialog: false,
+  annotations: {
+    category: ToolCategory.OPERA,
+    readOnlyHint: true,
+  },
+  schema: {},
+  handler: async (request, response) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const session = getCDPSession(request.page.pptrPage as any);
+    try {
+      const result = await dispatchAction(session, {action: 'listModels'});
+      response.appendResponseLine(result);
+    } catch (e) {
+      response.appendResponseLine(
+        `Opera.dispatchAction(listModels) failed with error: ${(e as Error).message}`,
       );
     }
   },
