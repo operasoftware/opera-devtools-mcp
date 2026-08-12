@@ -144,7 +144,7 @@ export default defineConfig([
   },
   {
     name: 'Tools definitions',
-    files: ['src/tools/**/*.ts'],
+    files: ['src/tools/**/*.ts', 'src/opera/tools/**/*.ts'],
     rules: {
       '@local/enforce-zod-schema': 'error',
     },

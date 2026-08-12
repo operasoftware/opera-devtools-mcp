@@ -12,7 +12,7 @@ import path from 'node:path';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 
-import {parseArguments} from '../build/src/bin/opera-devtools-mcp-cli-options.js';
+import {parseArguments} from '../build/src/bin/chrome-devtools-mcp-cli-options.js';
 import {buildFlag} from '../build/src/index.js';
 import {
   labels,

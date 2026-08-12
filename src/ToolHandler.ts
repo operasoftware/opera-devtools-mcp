@@ -2,6 +2,10 @@
  * @license
  * Copyright 2026 Google LLC
  * SPDX-License-Identifier: Apache-2.0
+ *
+ * Modified by Opera Software AS: optional `hooks` seam (see
+ * ./opera/toolHandlerHooks.ts) for mutex bypass, browser relaunch and log
+ * streaming. Keep the diff to the three `this.hooks?.` call sites.
  */
 
 import type {parseArguments} from './bin/chrome-devtools-mcp-cli-options.js';
@@ -9,6 +13,11 @@ import {logger} from './logger.js';
 import type {McpContext} from './McpContext.js';
 import {McpResponse} from './McpResponse.js';
 import type {Mutex} from './Mutex.js';
+import {CLI_BIN_NAME} from './opera/branding.js';
+import type {
+  OperaToolHooks,
+  ToolInvocationExtra,
+} from './opera/toolHandlerHooks.js';
 import {SlimMcpResponse} from './SlimMcpResponse.js';
 import {ClearcutLogger} from './telemetry/ClearcutLogger.js';
 import {bucketizeLatency} from './telemetry/metricUtils.js';
@@ -31,7 +40,7 @@ function buildDisabledMessage(
     ? `is in category ${categoryLabel} which`
     : `requires experimental feature ${flag} and`;
 
-  return `Tool ${toolName} ${reason} is currently disabled. Enable it by running chrome-devtools start ${flag}=true. For more information check the README.`;
+  return `Tool ${toolName} ${reason} is currently disabled. Enable it by running ${CLI_BIN_NAME} start ${flag}=true. For more information check the README.`;
 }
 
 function getCategoryStatus(
@@ -131,6 +140,7 @@ export class ToolHandler {
     private readonly serverArgs: ReturnType<typeof parseArguments>,
     private readonly getContext: () => Promise<McpContext>,
     private readonly toolMutex: Mutex,
+    private readonly hooks?: OperaToolHooks,
   ) {
     const {disabled, reason} = getToolStatusInfo(tool, serverArgs);
     this.disabledReason = reason;
@@ -145,7 +155,10 @@ export class ToolHandler {
         : tool.schema;
   }
 
-  async handle(params: Record<string, unknown>): Promise<CallToolResult> {
+  async handle(
+    params: Record<string, unknown>,
+    extra?: ToolInvocationExtra,
+  ): Promise<CallToolResult> {
     if (this.disabledReason) {
       return {
         content: [
@@ -158,19 +171,23 @@ export class ToolHandler {
       };
     }
 
-    const guard = await this.toolMutex.acquire();
+    const guard = this.hooks?.bypassMutex(this.tool)
+      ? undefined
+      : await this.toolMutex.acquire();
     const startTime = Date.now();
     let success = false;
     try {
       logger(
         `${this.tool.name} request: ${JSON.stringify(params, null, '  ')}`,
       );
+      await this.hooks?.beforeInvoke(this.tool);
       const context = await this.getContext();
       logger(`${this.tool.name} context: resolved`);
       await context.detectOpenDevToolsWindows();
+      const logCallback = this.hooks?.makeLogCallback(extra);
       const response = this.serverArgs.slim
-        ? new SlimMcpResponse(this.serverArgs)
-        : new McpResponse(this.serverArgs);
+        ? new SlimMcpResponse(this.serverArgs, logCallback)
+        : new McpResponse(this.serverArgs, logCallback);
 
       response.setRedactNetworkHeaders(this.serverArgs.redactNetworkHeaders);
       try {
@@ -191,6 +208,7 @@ export class ToolHandler {
             {
               params,
               page,
+              signal: extra?.signal,
             },
             response,
             context,
@@ -199,6 +217,7 @@ export class ToolHandler {
           await this.tool.handler(
             {
               params,
+              signal: extra?.signal,
             },
             response,
             context,
@@ -247,7 +266,7 @@ export class ToolHandler {
         success,
         latencyMs: bucketizeLatency(Date.now() - startTime),
       });
-      guard.dispose();
+      guard?.dispose();
     }
   }
 }

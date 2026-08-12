@@ -7,6 +7,26 @@ on:
     branches: [main]
 
 jobs:
+  upstream-seam:
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth: 0 — the verifier diffs against the fork base commit
+      # recorded in docs/UPSTREAM.md, which a shallow clone does not contain.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      # Both scripts are dependency-free, so this job skips `npm ci`. That also
+      # means `npm run prepare` has not registered the merge driver, which the
+      # verifier insists on — so register it here.
+      - run: node --experimental-strip-types scripts/setup-intake.ts
+
+      - run: npm run verify-upstream-seam
+
   build-and-test:
     runs-on: ubuntu-latest
     steps:

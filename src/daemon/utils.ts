@@ -12,6 +12,7 @@ import path from 'node:path';
 import process from 'node:process';
 
 import {logger} from '../logger.js';
+import {INDEX_SCRIPT_NAME, MCP_BIN_NAME} from '../opera/branding.js';
 import type {YargsOptions} from '../third_party/index.js';
 
 export const DAEMON_SCRIPT_PATH = path.join(import.meta.dirname, 'daemon.js');
@@ -19,10 +20,10 @@ export const INDEX_SCRIPT_PATH = path.join(
   import.meta.dirname,
   '..',
   'bin',
-  'opera-devtools-mcp.js',
+  INDEX_SCRIPT_NAME,
 );
 
-const APP_NAME = 'opera-devtools-mcp';
+const APP_NAME = MCP_BIN_NAME;
 export const DAEMON_CLIENT_NAME = 'chrome-devtools-cli-daemon';
 
 // Using these paths due to strict limits on the POSIX socket path length.

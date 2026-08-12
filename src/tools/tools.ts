@@ -6,7 +6,8 @@
  * Modified by Opera Software AS.
  */
 
-import type {ParsedArguments} from '../bin/opera-devtools-mcp-cli-options.js';
+import type {ParsedArguments} from '../bin/chrome-devtools-mcp-cli-options.js';
+import * as operaTools from '../opera/tools/opera.js';
 
 import * as consoleTools from './console.js';
 import * as emulationTools from './emulation.js';
@@ -15,7 +16,6 @@ import * as inputTools from './input.js';
 import * as lighthouseTools from './lighthouse.js';
 import * as memoryTools from './memory.js';
 import * as networkTools from './network.js';
-import * as operaTools from './opera.js';
 import * as pagesTools from './pages.js';
 import * as performanceTools from './performance.js';
 import * as screencastTools from './screencast.js';
