@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 
-import {logger} from '../logger.js';
+import {logger} from '../utils/logger.js';
 
 import {ClearcutLogger} from './ClearcutLogger.js';
 import {ErrorCode} from './errors.js';
@@ -67,7 +67,7 @@ export class FilePersistence implements Persistence {
       const content = await fs.readFile(filePath, 'utf-8');
       return JSON.parse(content) as LocalState;
     } catch (error) {
-      logger(`Failed to read telemetry state from ${filePath}:`, error);
+      logger?.(`Failed to read telemetry state from ${filePath}:`, error);
       void ClearcutLogger.get()?.logServerError({
         errorCode: ErrorCode.ERROR_CODE_PERSISTENCE_FILE_READ_FAILED,
       });
@@ -84,7 +84,7 @@ export class FilePersistence implements Persistence {
       await fs.writeFile(filePath, JSON.stringify(state, null, 2), 'utf-8');
     } catch (error) {
       // Ignore errors during state saving to avoid crashing the server
-      logger(`Failed to save telemetry state to ${filePath}:`, error);
+      logger?.(`Failed to save telemetry state to ${filePath}:`, error);
       void ClearcutLogger.get()?.logServerError({
         errorCode: ErrorCode.ERROR_CODE_PERSISTENCE_FILE_SAVE_FAILED,
       });

@@ -9,7 +9,13 @@
 import assert from 'node:assert';
 import {describe, it} from 'node:test';
 
-import {parseArguments} from '../src/bin/chrome-devtools-mcp-cli-options.js';
+import {parser} from '../src/bin/chrome-devtools-mcp-cli-options.js';
+
+function parseArguments(argv: string[], env: NodeJS.ProcessEnv = {}) {
+  return parser('0.0.0', ['node', 'main.js', ...argv], env)
+    .exitProcess(false)
+    .parseSync();
+}
 
 describe('cli args parsing', () => {
   const defaultArgs = {
@@ -31,10 +37,12 @@ describe('cli args parsing', () => {
     usageStatistics: false,
     'redact-network-headers': false,
     redactNetworkHeaders: false,
+    'allow-unrestricted-paths': false,
+    allowUnrestrictedPaths: false,
   };
 
   it('parses with default args', async () => {
-    const args = parseArguments('1.0.0', ['node', 'main.js'], {});
+    const args = parseArguments([]);
     assert.deepStrictEqual(args, {
       ...defaultArgs,
       _: [],
@@ -45,11 +53,7 @@ describe('cli args parsing', () => {
   });
 
   it('parses with browser url', async () => {
-    const args = parseArguments(
-      '1.0.0',
-      ['node', 'main.js', '--browserUrl', 'http://localhost:3000'],
-      {},
-    );
+    const args = parseArguments(['--browserUrl', 'http://localhost:3000']);
     assert.deepStrictEqual(args, {
       ...defaultArgs,
       _: [],
@@ -61,12 +65,21 @@ describe('cli args parsing', () => {
     });
   });
 
-  it('parses with user data dir', async () => {
-    const args = parseArguments(
-      '1.0.0',
-      ['node', 'main.js', '--user-data-dir', '/tmp/chrome-profile'],
-      {},
+  it('rejects unknown options', async () => {
+    assert.throws(
+      () => parseArguments(['--browserURL', 'http://localhost:3000']),
+      /Unknown argument: browserURL/,
     );
+  });
+
+  it('parses mixed-form option names', async () => {
+    const args = parseArguments(['--category-experimentalWebmcp']);
+
+    assert.strictEqual(args.categoryExperimentalWebmcp, true);
+  });
+
+  it('parses with user data dir', async () => {
+    const args = parseArguments(['--user-data-dir', '/tmp/chrome-profile']);
     assert.deepStrictEqual(args, {
       ...defaultArgs,
       _: [],
@@ -79,11 +92,7 @@ describe('cli args parsing', () => {
   });
 
   it('parses an empty browser url', async () => {
-    const args = parseArguments(
-      '1.0.0',
-      ['node', 'main.js', '--browserUrl', ''],
-      {},
-    );
+    const args = parseArguments(['--browserUrl', ''], {});
     assert.deepStrictEqual(args, {
       ...defaultArgs,
       _: [],
@@ -97,11 +106,7 @@ describe('cli args parsing', () => {
   });
 
   it('parses with executable path', async () => {
-    const args = parseArguments(
-      '1.0.0',
-      ['node', 'main.js', '--executablePath', '/tmp/test 123/chrome'],
-      {},
-    );
+    const args = parseArguments(['--executablePath', '/tmp/test 123/chrome']);
     assert.deepStrictEqual(args, {
       ...defaultArgs,
       _: [],
@@ -114,11 +119,7 @@ describe('cli args parsing', () => {
   });
 
   it('parses viewport', async () => {
-    const args = parseArguments(
-      '1.0.0',
-      ['node', 'main.js', '--viewport', '888x777'],
-      {},
-    );
+    const args = parseArguments(['--viewport', '888x777']);
     assert.deepStrictEqual(args, {
       ...defaultArgs,
       _: [],
@@ -133,16 +134,10 @@ describe('cli args parsing', () => {
   });
 
   it('parses chrome args', async () => {
-    const args = parseArguments(
-      '1.0.0',
-      [
-        'node',
-        'main.js',
-        `--chrome-arg='--no-sandbox'`,
-        `--chrome-arg='--disable-setuid-sandbox'`,
-      ],
-      {},
-    );
+    const args = parseArguments([
+      `--chrome-arg='--no-sandbox'`,
+      `--chrome-arg='--disable-setuid-sandbox'`,
+    ]);
     assert.deepStrictEqual(args, {
       ...defaultArgs,
       _: [],
@@ -155,16 +150,10 @@ describe('cli args parsing', () => {
   });
 
   it('parses ignore chrome args', async () => {
-    const args = parseArguments(
-      '1.0.0',
-      [
-        'node',
-        'main.js',
-        `--ignore-default-chrome-arg='--disable-extensions'`,
-        `--ignore-default-chrome-arg='--disable-cancel-all-touches'`,
-      ],
-      {},
-    );
+    const args = parseArguments([
+      `--ignore-default-chrome-arg='--disable-extensions'`,
+      `--ignore-default-chrome-arg='--disable-cancel-all-touches'`,
+    ]);
     assert.deepStrictEqual(args, {
       ...defaultArgs,
       _: [],
@@ -183,16 +172,10 @@ describe('cli args parsing', () => {
   });
 
   it('parses wsEndpoint with ws:// protocol', async () => {
-    const args = parseArguments(
-      '1.0.0',
-      [
-        'node',
-        'main.js',
-        '--wsEndpoint',
-        'ws://127.0.0.1:9222/devtools/browser/abc123',
-      ],
-      {},
-    );
+    const args = parseArguments([
+      '--wsEndpoint',
+      'ws://127.0.0.1:9222/devtools/browser/abc123',
+    ]);
     assert.deepStrictEqual(args, {
       ...defaultArgs,
       _: [],
@@ -205,16 +188,10 @@ describe('cli args parsing', () => {
   });
 
   it('parses wsEndpoint with wss:// protocol', async () => {
-    const args = parseArguments(
-      '1.0.0',
-      [
-        'node',
-        'main.js',
-        '--wsEndpoint',
-        'wss://example.com:9222/devtools/browser/abc123',
-      ],
-      {},
-    );
+    const args = parseArguments([
+      '--wsEndpoint',
+      'wss://example.com:9222/devtools/browser/abc123',
+    ]);
     assert.deepStrictEqual(args, {
       ...defaultArgs,
       _: [],
@@ -227,18 +204,12 @@ describe('cli args parsing', () => {
   });
 
   it('parses wsHeaders with valid JSON', async () => {
-    const args = parseArguments(
-      '1.0.0',
-      [
-        'node',
-        'main.js',
-        '--wsEndpoint',
-        'ws://127.0.0.1:9222/devtools/browser/abc123',
-        '--wsHeaders',
-        '{"Authorization":"Bearer token","X-Custom":"value"}',
-      ],
-      {},
-    );
+    const args = parseArguments([
+      '--wsEndpoint',
+      'ws://127.0.0.1:9222/devtools/browser/abc123',
+      '--wsHeaders',
+      '{"Authorization":"Bearer token","X-Custom":"value"}',
+    ]);
     assert.deepStrictEqual(args.wsHeaders, {
       Authorization: 'Bearer token',
       'X-Custom': 'value',
@@ -246,11 +217,7 @@ describe('cli args parsing', () => {
   });
 
   it('parses disabled category', async () => {
-    const args = parseArguments(
-      '1.0.0',
-      ['node', 'main.js', '--no-category-emulation'],
-      {},
-    );
+    const args = parseArguments(['--no-category-emulation']);
     assert.deepStrictEqual(args, {
       ...defaultArgs,
       _: [],
@@ -262,11 +229,7 @@ describe('cli args parsing', () => {
     });
   });
   it('parses auto-connect', async () => {
-    const args = parseArguments(
-      '1.0.0',
-      ['node', 'main.js', '--auto-connect'],
-      {},
-    );
+    const args = parseArguments(['--auto-connect'], {});
     assert.deepStrictEqual(args, {
       ...defaultArgs,
       _: [],
@@ -280,71 +243,110 @@ describe('cli args parsing', () => {
 
   it('parses usage statistics flag', async () => {
     // Default is false (opera opts out of telemetry by default).
-    const defaultArgs = parseArguments('1.0.0', ['node', 'main.js'], {});
+    const defaultArgs = parseArguments([]);
     assert.strictEqual(defaultArgs.usageStatistics, false);
 
     // Test enabling it
-    const enabledArgs = parseArguments(
-      '1.0.0',
-      ['node', 'main.js', '--usage-statistics'],
-      {},
-    );
+    const enabledArgs = parseArguments(['--usage-statistics']);
     assert.strictEqual(enabledArgs.usageStatistics, true);
 
     // Test disabling it
-    const disabledArgs = parseArguments(
-      '1.0.0',
-      ['node', 'main.js', '--no-usage-statistics'],
-      {},
-    );
+    const disabledArgs = parseArguments(['--no-usage-statistics']);
     assert.strictEqual(disabledArgs.usageStatistics, false);
   });
 
   it('respects env variable', async () => {
     // Test default (should be true).
-    const defaultArgs = parseArguments('1.0.0', ['node', 'main.js'], {
+    // Test default (should be true).
+    const defaultArgs = parseArguments([], {
       OPERA_DEVTOOLS_NO_USAGE_STATISTICS: 'true',
     });
     assert.strictEqual(defaultArgs.usageStatistics, false);
 
     // Test enabling it
-    const enabledArgs = parseArguments(
-      '1.0.0',
-      ['node', 'main.js', '--usage-statistics'],
-      {
-        OPERA_DEVTOOLS_NO_USAGE_STATISTICS: 'true',
-      },
-    );
+    const enabledArgs = parseArguments(['--usage-statistics'], {
+      OPERA_DEVTOOLS_NO_USAGE_STATISTICS: 'true',
+    });
     assert.strictEqual(enabledArgs.usageStatistics, false);
 
     // Test disabling it
-    const disabledArgs = parseArguments(
-      '1.0.0',
-      ['node', 'main.js', '--no-usage-statistics'],
-      {
-        OPERA_DEVTOOLS_NO_USAGE_STATISTICS: 'true',
-      },
-    );
+    const disabledArgs = parseArguments(['--no-usage-statistics'], {
+      OPERA_DEVTOOLS_NO_USAGE_STATISTICS: 'true',
+    });
     assert.strictEqual(disabledArgs.usageStatistics, false);
   });
 
   it('parses performance crux flag', async () => {
-    const defaultArgs = parseArguments('1.0.0', ['node', 'main.js']);
+    const defaultArgs = parseArguments([]);
     assert.strictEqual(defaultArgs.performanceCrux, false);
 
     // force enable
-    const enabledArgs = parseArguments(
-      '1.0.0',
-      ['node', 'main.js', '--performance-crux'],
-      {},
-    );
+    const enabledArgs = parseArguments(['--performance-crux']);
     assert.strictEqual(enabledArgs.performanceCrux, true);
 
-    const disabledArgs = parseArguments(
-      '1.0.0',
-      ['node', 'main.js', '--no-performance-crux'],
-      {},
-    );
+    const disabledArgs = parseArguments(['--no-performance-crux']);
     assert.strictEqual(disabledArgs.performanceCrux, false);
+  });
+
+  it('parses blocked-url-pattern flags as array', async () => {
+    const defaultArgs = parseArguments(['main.js']);
+    assert.strictEqual(defaultArgs.blockedUrlPattern, undefined);
+
+    const singleArgs = parseArguments([
+      '--blocked-url-pattern=https://example.com/*',
+    ]);
+    assert.deepStrictEqual(singleArgs.blockedUrlPattern, [
+      'https://example.com/*',
+    ]);
+
+    const repeatedArgs = parseArguments([
+      '--blocked-url-pattern=https://a.com/*',
+      '--blocked-url-pattern=https://b.com/*',
+    ]);
+    assert.deepStrictEqual(repeatedArgs.blockedUrlPattern, [
+      'https://a.com/*',
+      'https://b.com/*',
+    ]);
+
+    const spaceSeparatedArgs = parseArguments([
+      '--blocked-url-pattern',
+      'https://a.com/*',
+      'https://b.com/*',
+    ]);
+    assert.deepStrictEqual(spaceSeparatedArgs.blockedUrlPattern, [
+      'https://a.com/*',
+      'https://b.com/*',
+    ]);
+  });
+
+  it('parses allowed-url-pattern flags as array', async () => {
+    const defaultArgs = parseArguments(['main.js']);
+    assert.strictEqual(defaultArgs.allowedUrlPattern, undefined);
+
+    const singleArgs = parseArguments([
+      '--allowed-url-pattern=https://example.com/*',
+    ]);
+    assert.deepStrictEqual(singleArgs.allowedUrlPattern, [
+      'https://example.com/*',
+    ]);
+
+    const repeatedArgs = parseArguments([
+      '--allowed-url-pattern=https://a.com/*',
+      '--allowed-url-pattern=https://b.com/*',
+    ]);
+    assert.deepStrictEqual(repeatedArgs.allowedUrlPattern, [
+      'https://a.com/*',
+      'https://b.com/*',
+    ]);
+
+    const spaceSeparatedArgs = parseArguments([
+      '--allowed-url-pattern',
+      'https://a.com/*',
+      'https://b.com/*',
+    ]);
+    assert.deepStrictEqual(spaceSeparatedArgs.allowedUrlPattern, [
+      'https://a.com/*',
+      'https://b.com/*',
+    ]);
   });
 });

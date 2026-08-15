@@ -25,6 +25,7 @@ function getRegistry(): string {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
       timeout: 5000,
+      windowsHide: true,
     })
       .trim()
       .replace(/\/$/, '');

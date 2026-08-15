@@ -7,7 +7,6 @@
 import {zod} from '../third_party/index.js';
 import type {Frame, JSHandle, Page, WebWorker} from '../third_party/index.js';
 import type {ExtensionServiceWorker} from '../types.js';
-import {appendWaitForResult} from '../WaitForHelper.js';
 
 import {ToolCategory} from './categories.js';
 import type {Context, Response} from './ToolDefinition.js';
@@ -18,23 +17,17 @@ export type Evaluatable = Page | Frame | WebWorker;
 export const evaluateScript = defineTool(cliArgs => {
   return {
     name: 'evaluate_script',
-    description: `Evaluate a JavaScript function inside the currently selected page${cliArgs?.categoryExtensions ? ' or service worker' : ''}. Returns the response as JSON,
-so returned values have to be JSON-serializable.`,
+    description: `Evaluate a JavaScript function inside the currently selected page${cliArgs?.categoryExtensions ? ' or service worker' : ''}. Returns the response as JSON, so returned values have to be JSON-serializable.`,
     annotations: {
       category: ToolCategory.DEBUGGING,
       readOnlyHint: false,
     },
     schema: {
+      ...(cliArgs?.experimentalPageIdRouting ? pageIdSchema : {}),
       function: zod.string().describe(
         `A JavaScript function declaration to be executed by the tool in the currently selected page.
-Example without arguments: \`() => {
-  return document.title
-}\` or \`async () => {
-  return await fetch("example.com")
-}\`.
-Example with arguments: \`(el) => {
-  return el.innerText;
-}\`
+Example without arguments: \`() => document.title\` or \`async () => await fetch("example.com")\`.
+Example with arguments: \`(el) => el.innerText\`
 `,
       ),
       args: zod
@@ -47,13 +40,24 @@ Example with arguments: \`(el) => {
         )
         .optional()
         .describe(`An optional list of arguments to pass to the function.`),
+      filePath: zod
+        .string()
+        .optional()
+        .describe(
+          'The absolute or relative path to a file to save the script output to. If omitted, the output is returned inline.',
+        ),
       dialogAction: zod
         .string()
         .optional()
         .describe(
           'Handle dialogs while execution. "accept", "dismiss", or string for response of window.prompt. Defaults to accept.',
         ),
-      ...(cliArgs?.experimentalPageIdRouting ? pageIdSchema : {}),
+      waitForStableDom: zod
+        .boolean()
+        .optional()
+        .describe(
+          'Whether to wait for the DOM to settle. Pass false if the script only reads data. Defaults to true.',
+        ),
       ...(cliArgs?.categoryExtensions
         ? {
             serviceWorkerId: zod
@@ -66,6 +70,9 @@ Example with arguments: \`(el) => {
         : {}),
     },
     blockedByDialog: true,
+    verifyFilesSchema: {
+      filePath: true,
+    },
     handler: async (request, response, context) => {
       const {
         serviceWorkerId,
@@ -73,6 +80,8 @@ Example with arguments: \`(el) => {
         function: fnString,
         pageId,
         dialogAction,
+        filePath,
+        waitForStableDom,
       } = request.params;
 
       if (cliArgs?.categoryExtensions && serviceWorkerId) {
@@ -90,11 +99,18 @@ Example with arguments: \`(el) => {
           .getSelectedMcpPage()
           .waitForEventsAfterAction(
             async () => {
-              await performEvaluation(worker, fnString, [], response);
+              await performEvaluation(worker, fnString, [], response, {
+                filePath,
+                context,
+              });
             },
-            {handleDialog: dialogAction ?? 'accept'},
+            // Service workers cannot interact with the DOM, so never wait for it.
+            {handleDialog: dialogAction ?? 'accept', waitForStableDom: false},
           );
-        appendWaitForResult(response, result);
+        if (result.dialogHandled) {
+          context.getSelectedMcpPage().clearDialog();
+        }
+        response.attachWaitForResult(result);
         return;
       }
 
@@ -104,26 +120,28 @@ Example with arguments: \`(el) => {
       const page: Page = mcpPage.pptrPage;
 
       const args: Array<JSHandle<unknown>> = [];
-      try {
-        const frames = new Set<Frame>();
-        for (const uid of uidArgs ?? []) {
-          const handle = await mcpPage.getElementByUid(uid);
-          frames.add(handle.frame);
-          args.push(handle);
-        }
+      using stack = new DisposableStack();
 
-        const evaluatable = await getPageOrFrame(page, frames);
-
-        const result = await mcpPage.waitForEventsAfterAction(
-          async () => {
-            await performEvaluation(evaluatable, fnString, args, response);
-          },
-          {handleDialog: dialogAction ?? 'accept'},
-        );
-        appendWaitForResult(response, result);
-      } finally {
-        void Promise.allSettled(args.map(arg => arg.dispose()));
+      const frames = new Set<Frame>();
+      for (const uid of uidArgs ?? []) {
+        const handle = await mcpPage.getElementByUid(uid);
+        frames.add(handle.frame);
+        stack.use(handle);
+        args.push(handle);
       }
+
+      const evaluatable = await getPageOrFrame(page, frames);
+
+      const result = await mcpPage.waitForEventsAfterAction(
+        async () => {
+          await performEvaluation(evaluatable, fnString, args, response, {
+            filePath,
+            context,
+          });
+        },
+        {handleDialog: dialogAction ?? 'accept', waitForStableDom},
+      );
+      response.attachWaitForResult(result);
     },
   };
 });
@@ -133,23 +151,33 @@ const performEvaluation = async (
   fnString: string,
   args: Array<JSHandle<unknown>>,
   response: Response,
+  options?: {filePath: string; context: Context},
 ) => {
-  const fn = await evaluatable.evaluateHandle(`(${fnString})`);
-  try {
-    const result = await evaluatable.evaluate(
-      async (fn, ...args) => {
-        // @ts-expect-error no types for function fn
-        return JSON.stringify(await fn(...args));
-      },
-      fn,
-      ...args,
+  using fn = await evaluatable.evaluateHandle(`(${fnString})`);
+
+  const result = await evaluatable.evaluate(
+    async (fn, ...args) => {
+      // @ts-expect-error no types for function fn
+      return JSON.stringify(await fn(...args));
+    },
+    fn,
+    ...args,
+  );
+  if (options?.filePath) {
+    const data = new TextEncoder().encode(result ?? 'undefined');
+    const {filename} = await options.context.saveFile(
+      data,
+      options.filePath,
+      '.json',
     );
+    response.appendResponseLine(
+      `Script ran on page. Output saved to ${filename}.`,
+    );
+  } else {
     response.appendResponseLine('Script ran on page and returned:');
     response.appendResponseLine('```json');
     response.appendResponseLine(`${result}`);
     response.appendResponseLine('```');
-  } finally {
-    void fn.dispose();
   }
 };
 

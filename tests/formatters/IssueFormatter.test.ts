@@ -9,8 +9,8 @@ import {describe, it, beforeEach, afterEach} from 'node:test';
 
 import sinon from 'sinon';
 
+import {ISSUE_UTILS} from '../../src/devtools/issueDescriptions.js';
 import {IssueFormatter} from '../../src/formatters/IssueFormatter.js';
-import {ISSUE_UTILS} from '../../src/issue-descriptions.js';
 import {getMockAggregatedIssue} from '../utils.js';
 
 describe('IssueFormatter', () => {
@@ -30,11 +30,11 @@ describe('IssueFormatter', () => {
   ) {
     it(label + ' toString', async t => {
       const formatter = await setup(t);
-      t.assert.snapshot?.(formatter.toString());
+      t.assert.snapshot(formatter.toString());
     });
     it(label + ' toJSON', async t => {
       const formatter = await setup(t);
-      t.assert.snapshot?.(JSON.stringify(formatter.toJSON(), null, 2));
+      t.assert.snapshot(JSON.stringify(formatter.toJSON(), null, 2));
     });
   }
 
@@ -44,12 +44,26 @@ describe('IssueFormatter', () => {
   ) {
     it(label + ' toStringDetailed', async t => {
       const formatter = await setup(t);
-      t.assert.snapshot?.(formatter.toStringDetailed());
+      t.assert.snapshot(formatter.toStringDetailed());
     });
     it(label + ' toJSONDetailed', async t => {
       const formatter = await setup(t);
-      t.assert.snapshot?.(JSON.stringify(formatter.toJSONDetailed(), null, 2));
+      t.assert.snapshot(JSON.stringify(formatter.toJSONDetailed(), null, 2));
     });
+  }
+
+  function getMockIssueWithDetails(details: object | null) {
+    const mockAggregatedIssue = getMockAggregatedIssue();
+    mockAggregatedIssue.getDescription.returns({
+      file: 'mock.md',
+      links: [],
+    });
+    getIssueDescriptionStub
+      .withArgs('mock.md')
+      .returns('# Mock Issue Title\n\nThis is a mock issue description');
+    // @ts-expect-error stubbed issue does not match the complete type.
+    mockAggregatedIssue.getAllIssues.returns([{details: () => details}]);
+    return mockAggregatedIssue;
   }
 
   formatterTestConcise('formats an issue message', async () => {
@@ -131,6 +145,105 @@ describe('IssueFormatter', () => {
     return new IssueFormatter(mockAggregatedIssue, {
       id: 5,
       elementIdResolver: () => '1_1',
+    });
+  });
+
+  formatterTestDetailed(
+    'formats a detailed issue with a resolved request id',
+    async () => {
+      const mockAggregatedIssue = getMockIssueWithDetails({
+        request: {
+          url: 'http://example.com/data.json',
+          requestId: 'REQUEST-1',
+        },
+        errorType: 'MockError',
+        frameId: 'FRAME-1',
+      });
+
+      return new IssueFormatter(mockAggregatedIssue, {
+        id: 6,
+        requestIdResolver: requestId =>
+          requestId === 'REQUEST-1' ? 42 : undefined,
+      });
+    },
+  );
+
+  formatterTestDetailed(
+    'formats a detailed issue with an unresolved request id',
+    async () => {
+      const mockAggregatedIssue = getMockIssueWithDetails({
+        request: {
+          url: 'http://example.com/data.json',
+          requestId: 'REQUEST-1',
+        },
+      });
+
+      return new IssueFormatter(mockAggregatedIssue, {
+        id: 7,
+      });
+    },
+  );
+
+  it('falls back to "Unknown Issue" when there is no description metadata', () => {
+    const mockAggregatedIssue = getMockAggregatedIssue();
+    mockAggregatedIssue.getDescription.returns(null);
+    mockAggregatedIssue.getAggregatedIssuesCount.returns(1);
+
+    const formatter = new IssueFormatter(mockAggregatedIssue, {id: 3});
+    assert.strictEqual(
+      formatter.toString(),
+      'msgid=3 [issue] Unknown Issue (count: 1)',
+    );
+    assert.strictEqual(
+      formatter.toStringDetailed(),
+      'ID: 3\nMessage: issue> Unknown Issue',
+    );
+  });
+
+  describe('affected resources', () => {
+    it('resolves nodeId with the element id resolver', () => {
+      const formatter = new IssueFormatter(
+        getMockIssueWithDetails({nodeId: 42, extra: 'info'}),
+        {
+          id: 1,
+          elementIdResolver: backendNodeId =>
+            backendNodeId === 42 ? '2_7' : undefined,
+        },
+      );
+      assert.deepStrictEqual(formatter.toJSONDetailed().affectedResources, [
+        {uid: '2_7', data: {extra: 'info'}, request: undefined},
+      ]);
+    });
+
+    it('resolves documentNodeId with the element id resolver', () => {
+      const formatter = new IssueFormatter(
+        getMockIssueWithDetails({documentNodeId: 7}),
+        {
+          id: 1,
+          elementIdResolver: backendNodeId =>
+            backendNodeId === 7 ? '3_1' : undefined,
+        },
+      );
+      assert.deepStrictEqual(formatter.toJSONDetailed().affectedResources, [
+        {uid: '3_1', data: {}, request: undefined},
+      ]);
+    });
+
+    it('keeps node ids if there is no element id resolver', () => {
+      const formatter = new IssueFormatter(
+        getMockIssueWithDetails({nodeId: 42}),
+        {id: 1},
+      );
+      assert.deepStrictEqual(formatter.toJSONDetailed().affectedResources, [
+        {uid: undefined, data: {nodeId: 42}, request: undefined},
+      ]);
+    });
+
+    it('skips issues without details', () => {
+      const formatter = new IssueFormatter(getMockIssueWithDetails(null), {
+        id: 1,
+      });
+      assert.deepStrictEqual(formatter.toJSONDetailed().affectedResources, []);
     });
   });
 

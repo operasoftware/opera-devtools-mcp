@@ -163,40 +163,43 @@ export const cliOptions = {
   experimentalPageIdRouting: {
     type: 'boolean',
     describe:
-      'Whether to expose pageId on page-scoped tools and route requests by page ID.',
-    hidden: true,
+      'Whether to expose pageId on page-scoped tools and route requests by page ID (useful for concurrent agent sessions).',
   },
   experimentalDevtools: {
     type: 'boolean',
     describe: 'Whether to enable automation over DevTools targets',
-    hidden: true,
   },
   experimentalVision: {
     type: 'boolean',
     describe:
       'Whether to enable coordinate-based tools such as click_at(x,y). Usually requires a computer-use model able to produce accurate coordinates by looking at screenshots.',
-    hidden: false,
   },
-  experimentalMemory: {
+  memoryDebugging: {
     type: 'boolean',
-    describe: 'Whether to enable experimental memory tools.',
-    hidden: true,
+    describe: 'Whether to enable memory debugging tools.',
+    alias: 'experimentalMemory',
   },
   experimentalStructuredContent: {
     type: 'boolean',
     describe: 'Whether to output structured formatted content.',
+  },
+  experimentalToonFormat: {
+    type: 'boolean',
+    describe:
+      'Deprecated: use --experimentalDataFormat=toon instead. Whether to format structured data using TOON (requires @toon-format/toon).',
+    hidden: true,
+  },
+  experimentalDataFormat: {
+    type: 'string',
+    describe:
+      'Override format for structured data in text responses. Default uses built-in formatters. "toon" (requires @toon-format/toon) or "gcf" (requires @blackwell-systems/gcf) replace structured content with the specified encoding.',
+    choices: ['default', 'toon', 'gcf'] as const,
     hidden: true,
   },
   experimentalIncludeAllPages: {
     type: 'boolean',
     describe:
       'Whether to include all kinds of pages such as webviews or background pages as pages.',
-    hidden: true,
-  },
-  experimentalNavigationAllowlist: {
-    type: 'boolean',
-    describe: 'Whether to enable navigation allowlist tool parameter.',
-    hidden: true,
   },
   experimentalInteropTools: {
     type: 'boolean',
@@ -216,11 +219,23 @@ export const cliOptions = {
   categoryExperimentalWebmcp: {
     type: 'boolean',
     describe:
-      'Set to true to enable debugging WebMCP tools. Requires Chrome 149+ with the following flags: `--enable-features=WebMCPTesting,DevToolsWebMCPSupport`',
+      'Set to true to enable debugging WebMCP tools. Requires Chrome 150+ with the following flag: `--enable-features=WebMCP`',
   },
   chromeArg: {
     type: 'array',
     describe: `Additional arguments for Chrome. Only applies when Chrome is launched by ${MCP_BIN_NAME}.`,
+  },
+  blockedUrlPattern: {
+    type: 'array',
+    describe:
+      "Restricts browser's network access by blocking specified URL patterns (uses https://urlpattern.spec.whatwg.org/). Silently detaches from targets with blocked URLs upon connection, and blocks runtime requests (including navigations and subresources). Accepts an array of patterns.",
+    conflicts: ['allowedUrlPattern'],
+  },
+  allowedUrlPattern: {
+    type: 'array',
+    describe:
+      "Restricts browser's network access by allowing only specified URL patterns (uses https://urlpattern.spec.whatwg.org/). Requires Chrome 149+. Silently detaches from targets with unallowed URLs upon connection, and blocks runtime requests (including navigations and subresources). Accepts an array of patterns.",
+    conflicts: ['blockedUrlPattern'],
   },
   ignoreDefaultChromeArg: {
     type: 'array',
@@ -254,6 +269,13 @@ export const cliOptions = {
     describe:
       'Set to true to enable third-party developer tools exposed by the inspected page itself',
   },
+  categoryPwa: {
+    type: 'boolean',
+    hidden: false,
+    conflicts: ['autoConnect', 'browserUrl', 'wsEndpoint'],
+    describe:
+      'Set to true to include tools for automating Progressive Web Apps (install, launch, uninstall, and OS state). This feature is only supported with a pipe connection; autoConnect, browserUrl, and wsEndpoint are not supported.',
+  },
   performanceCrux: {
     type: 'boolean',
     default: PERFORMANCE_CRUX_DEFAULT,
@@ -279,6 +301,60 @@ export const cliOptions = {
     hidden: true,
     describe: 'Include watchdog PID in Clearcut request headers (for testing).',
   },
+  screenshotFormat: {
+    type: 'string',
+    description:
+      'Override the default output format used by take_screenshot when the caller does not specify one. JPEG and WebP are ~3-5x smaller than PNG, which helps reduce context size in AI conversations. Unset preserves the existing default ("png").',
+    choices: ['jpeg', 'png', 'webp'] as const,
+  },
+  screenshotQuality: {
+    type: 'number',
+    description:
+      'Override the default compression quality (0-100) used by take_screenshot for JPEG and WebP when the caller does not specify one. Lower values mean smaller files. Ignored for PNG. Unset preserves the Puppeteer default.',
+    coerce: (value: number | undefined) => {
+      if (value === undefined) {
+        return;
+      }
+      if (!Number.isInteger(value) || value < 0 || value > 100) {
+        throw new Error(
+          `Invalid screenshotQuality ${value}. Expected an integer between 0 and 100.`,
+        );
+      }
+      return value;
+    },
+  },
+  screenshotMaxWidth: {
+    type: 'number',
+    description:
+      'Maximum width in pixels for screenshots. If the captured image is wider, it is downscaled (preserving aspect ratio) before being returned. Reduces context size in AI conversations. Unset means no resize.',
+    coerce: (value: number | undefined) => {
+      if (value === undefined) {
+        return;
+      }
+      if (!Number.isInteger(value) || value <= 0) {
+        throw new Error(
+          `Invalid screenshotMaxWidth ${value}. Expected a positive integer.`,
+        );
+      }
+      return value;
+    },
+  },
+  screenshotMaxHeight: {
+    type: 'number',
+    description:
+      'Maximum height in pixels for screenshots. If the captured image is taller, it is downscaled (preserving aspect ratio) before being returned. Can be combined with --screenshot-max-width; the smaller scale factor wins. Unset means no resize.',
+    coerce: (value: number | undefined) => {
+      if (value === undefined) {
+        return;
+      }
+      if (!Number.isInteger(value) || value <= 0) {
+        throw new Error(
+          `Invalid screenshotMaxHeight ${value}. Expected a positive integer.`,
+        );
+      }
+      return value;
+    },
+  },
   slim: {
     type: 'boolean',
     describe:
@@ -293,22 +369,48 @@ export const cliOptions = {
   redactNetworkHeaders: {
     type: 'boolean',
     describe:
-      'If true, redacts some of the network headers considered senstive before returning to the client.',
+      'If true, redacts some of the network headers considered sensitive before returning to the client.',
     default: false,
+  },
+  allowUnrestrictedPaths: {
+    type: 'boolean',
+    default: false,
+    describe:
+      'If set, disables the default path restriction that applies when the MCP client does not negotiate ' +
+      'the roots capability. By default, file-writing tools are restricted to the OS temp directory when ' +
+      'no roots are configured. Use this only when connecting a trusted local client that does not implement ' +
+      'MCP roots and requires access to paths outside the temp directory.',
   },
 } satisfies Record<string, YargsOptions>;
 
 export type ParsedArguments = ReturnType<typeof parseArguments>;
 
-export function parseArguments(
+/**
+ * Exported only for testing to not trigger process exit.
+ */
+export function parser(
   version: string,
   argv = process.argv,
   env = process.env,
 ) {
+  // Preserve yargs' mixed camel/kebab-case expansion under strict validation.
+  const kebabCaseAliases: Record<string, string> = {};
+  for (const option of Object.keys(cliOptions)) {
+    const alias = option.replace(
+      /[A-Z]/g,
+      letter => `-${letter.toLowerCase()}`,
+    );
+    if (alias !== option) {
+      kebabCaseAliases[option] = alias;
+    }
+  }
+
   const yargsInstance = yargs(hideBin(argv))
     .scriptName(`npx ${PACKAGE_NAME}@latest`)
     .options(cliOptions)
-    .check(args => {
+    .alias(kebabCaseAliases)
+    .strictOptions()
+    .middleware(args => {
       // We can't set default in the options else
       // Yargs will complain
       if (
@@ -325,7 +427,6 @@ export function parseArguments(
         );
         args.usageStatistics = false;
       }
-      return true;
     })
     .example([
       [
@@ -393,6 +494,13 @@ export function parseArguments(
   return yargsInstance
     .wrap(Math.min(120, yargsInstance.terminalWidth()))
     .help()
-    .version(version)
-    .parseSync();
+    .version(version);
+}
+
+export function parseArguments(
+  version: string,
+  argv = process.argv,
+  env = process.env,
+) {
+  return parser(version, argv, env).parseSync();
 }

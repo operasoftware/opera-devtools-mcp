@@ -83,6 +83,19 @@ export const commands: Commands = {
       },
     },
   },
+  close_heapsnapshot: {
+    description:
+      'Closes a previously loaded memory heapsnapshot, freeing its memory. (requires flag: --memoryDebugging=true)',
+    category: 'Memory',
+    args: {
+      filePath: {
+        name: 'filePath',
+        type: 'string',
+        description: 'A path to the .heapsnapshot file to close.',
+        required: true,
+      },
+    },
+  },
   close_page: {
     description:
       'Closes the page by its index. The last open page cannot be closed.',
@@ -94,6 +107,34 @@ export const commands: Commands = {
         description:
           'The ID of the page to close. Call list_pages to list pages.',
         required: true,
+      },
+    },
+  },
+  compare_heapsnapshots: {
+    description:
+      'Loads two memory heapsnapshots and returns the comparison. If classIndex is provided, returns detailed diff for that class, otherwise returns summary diff. (requires flag: --memoryDebugging=true)',
+    category: 'Memory',
+    args: {
+      baseFilePath: {
+        name: 'baseFilePath',
+        type: 'string',
+        description:
+          'A path to the base .heapsnapshot file (earlier snapshot).',
+        required: true,
+      },
+      currentFilePath: {
+        name: 'currentFilePath',
+        type: 'string',
+        description:
+          'A path to the current .heapsnapshot file (later snapshot).',
+        required: true,
+      },
+      classIndex: {
+        name: 'classIndex',
+        type: 'number',
+        description:
+          'Optional 0-based index of the class in the summary list to filter results, showing individual objects.',
+        required: false,
       },
     },
   },
@@ -144,7 +185,7 @@ export const commands: Commands = {
         name: 'geolocation',
         type: 'string',
         description:
-          'Geolocation (`<latitude>x<longitude>`) to emulate. Latitude between -90 and 90. Longitude between -180 and 180. Omit to clear the geolocation override.',
+          'Geolocation (`<latitude>,<longitude>`) to emulate. Latitude between -90 and 90. Longitude between -180 and 180. Omit to clear the geolocation override.',
         required: false,
       },
       userAgent: {
@@ -169,18 +210,25 @@ export const commands: Commands = {
           "Emulate device viewports '<width>x<height>x<devicePixelRatio>[,mobile][,touch][,landscape]'. 'touch' and 'mobile' to emulate mobile devices. 'landscape' to emulate landscape mode.",
         required: false,
       },
+      extraHttpHeaders: {
+        name: 'extraHttpHeaders',
+        type: 'string',
+        description:
+          'Extra HTTP headers as a JSON string object, e.g. {"X-Custom": "value", "Authorization": "Bearer token"}. Headers are included into every HTTP request originating from the page and persist across navigations until cleared. Pass an empty string to clear all extra headers.',
+        required: false,
+      },
     },
   },
   evaluate_script: {
     description:
-      'Evaluate a JavaScript function inside the currently selected page. Returns the response as JSON,\nso returned values have to be JSON-serializable.',
+      'Evaluate a JavaScript function inside the currently selected page. Returns the response as JSON, so returned values have to be JSON-serializable.',
     category: 'Debugging',
     args: {
       function: {
         name: 'function',
         type: 'string',
         description:
-          'A JavaScript function declaration to be executed by the tool in the currently selected page.\nExample without arguments: `() => {\n  return document.title\n}` or `async () => {\n  return await fetch("example.com")\n}`.\nExample with arguments: `(el) => {\n  return el.innerText;\n}`\n',
+          'A JavaScript function declaration to be executed by the tool in the currently selected page.\nExample without arguments: `() => document.title` or `async () => await fetch("example.com")`.\nExample with arguments: `(el) => el.innerText`\n',
         required: true,
       },
       args: {
@@ -189,11 +237,25 @@ export const commands: Commands = {
         description: 'An optional list of arguments to pass to the function.',
         required: false,
       },
+      filePath: {
+        name: 'filePath',
+        type: 'string',
+        description:
+          'The absolute or relative path to a file to save the script output to. If omitted, the output is returned inline.',
+        required: false,
+      },
       dialogAction: {
         name: 'dialogAction',
         type: 'string',
         description:
           'Handle dialogs while execution. "accept", "dismiss", or string for response of window.prompt. Defaults to accept.',
+        required: false,
+      },
+      waitForStableDom: {
+        name: 'waitForStableDom',
+        type: 'boolean',
+        description:
+          'Whether to wait for the DOM to settle. Pass false if the script only reads data. Defaults to true.',
         required: false,
       },
     },
@@ -279,9 +341,9 @@ export const commands: Commands = {
       },
     },
   },
-  get_memory_snapshot_details: {
+  get_heapsnapshot_class_nodes: {
     description:
-      'Loads a memory heapsnapshot and returns all available information including statistics, static data, and aggregated node information. Supports pagination for aggregates. (requires flag: --experimentalMemory=true)',
+      'Loads a memory heapsnapshot and returns instances of a specific class with their IDs. (requires flag: --memoryDebugging=true)',
     category: 'Memory',
     args: {
       filePath: {
@@ -289,6 +351,81 @@ export const commands: Commands = {
         type: 'string',
         description: 'A path to a .heapsnapshot file to read.',
         required: true,
+      },
+      id: {
+        name: 'id',
+        type: 'number',
+        description: 'The ID for the class, obtained from details.',
+        required: true,
+      },
+      filterName: {
+        name: 'filterName',
+        type: 'string',
+        description: 'An optional filter to apply to the nodes.',
+        required: false,
+        enum: [
+          'objectsRetainedByDetachedDomNodes',
+          'objectsRetainedByConsole',
+          'objectsRetainedByEventHandlers',
+          'objectsRetainedByContexts',
+          'sharedNativeContext',
+          'noNativeContext',
+          'attributedToSpecificNativeContext',
+        ],
+      },
+      objectId: {
+        name: 'objectId',
+        type: 'number',
+        description:
+          'The object ID (nodeId) of the specific native context to filter by when filterName is attributedToSpecificNativeContext.',
+        required: false,
+      },
+      pageIdx: {
+        name: 'pageIdx',
+        type: 'number',
+        description: 'The page index for pagination.',
+        required: false,
+      },
+      pageSize: {
+        name: 'pageSize',
+        type: 'number',
+        description: 'The page size for pagination.',
+        required: false,
+      },
+    },
+  },
+  get_heapsnapshot_details: {
+    description:
+      'Loads a memory heapsnapshot and returns all available information including statistics, static data, and aggregated node information. Supports pagination for aggregates. (requires flag: --memoryDebugging=true)',
+    category: 'Memory',
+    args: {
+      filePath: {
+        name: 'filePath',
+        type: 'string',
+        description: 'A path to a .heapsnapshot file to read.',
+        required: true,
+      },
+      filterName: {
+        name: 'filterName',
+        type: 'string',
+        description: 'An optional filter to apply to the aggregates.',
+        required: false,
+        enum: [
+          'objectsRetainedByDetachedDomNodes',
+          'objectsRetainedByConsole',
+          'objectsRetainedByEventHandlers',
+          'objectsRetainedByContexts',
+          'sharedNativeContext',
+          'noNativeContext',
+          'attributedToSpecificNativeContext',
+        ],
+      },
+      objectId: {
+        name: 'objectId',
+        type: 'number',
+        description:
+          'The object ID (nodeId) of the specific native context to filter by when filterName is attributedToSpecificNativeContext.',
+        required: false,
       },
       pageIdx: {
         name: 'pageIdx',
@@ -301,6 +438,201 @@ export const commands: Commands = {
         type: 'number',
         description: 'The page size for pagination of aggregates.',
         required: false,
+      },
+    },
+  },
+  get_heapsnapshot_dominators: {
+    description:
+      'Loads a memory heapsnapshot and returns the dominator chain for a specific node ID. This helps to identify which objects are keeping the target node alive. (requires flag: --memoryDebugging=true)',
+    category: 'Memory',
+    args: {
+      filePath: {
+        name: 'filePath',
+        type: 'string',
+        description: 'A path to a .heapsnapshot file to read.',
+        required: true,
+      },
+      nodeId: {
+        name: 'nodeId',
+        type: 'number',
+        description: 'The node ID to get the dominator chain for.',
+        required: true,
+      },
+    },
+  },
+  get_heapsnapshot_duplicate_strings: {
+    description:
+      'Loads a memory heapsnapshot and returns duplicate strings grouped by their value. (requires flag: --memoryDebugging=true)',
+    category: 'Memory',
+    args: {
+      filePath: {
+        name: 'filePath',
+        type: 'string',
+        description: 'A path to a .heapsnapshot file to read.',
+        required: true,
+      },
+      pageIdx: {
+        name: 'pageIdx',
+        type: 'number',
+        description: 'The page index for pagination.',
+        required: false,
+      },
+      pageSize: {
+        name: 'pageSize',
+        type: 'number',
+        description: 'The page size for pagination.',
+        required: false,
+      },
+    },
+  },
+  get_heapsnapshot_edges: {
+    description:
+      'Loads a memory heapsnapshot and returns outgoing edges (references) for a specific node ID. (requires flag: --memoryDebugging=true)',
+    category: 'Memory',
+    args: {
+      filePath: {
+        name: 'filePath',
+        type: 'string',
+        description: 'A path to a .heapsnapshot file to read.',
+        required: true,
+      },
+      nodeId: {
+        name: 'nodeId',
+        type: 'number',
+        description: 'The node ID to get outgoing edges for.',
+        required: true,
+      },
+      sortBy: {
+        name: 'sortBy',
+        type: 'string',
+        description: 'Sort order for edges. Default is retainedSize.',
+        required: false,
+        enum: ['retainedSize', 'selfSize', 'name'],
+      },
+      minRetainedSize: {
+        name: 'minRetainedSize',
+        type: 'number',
+        description: 'Minimum retained size in bytes for target nodes.',
+        required: false,
+      },
+      excludePrimitives: {
+        name: 'excludePrimitives',
+        type: 'boolean',
+        description:
+          'Whether to exclude primitive target nodes. Default is true.',
+        required: false,
+      },
+      pageIdx: {
+        name: 'pageIdx',
+        type: 'number',
+        description: 'The page index for pagination.',
+        required: false,
+      },
+      pageSize: {
+        name: 'pageSize',
+        type: 'number',
+        description: 'The page size for pagination.',
+        required: false,
+      },
+    },
+  },
+  get_heapsnapshot_object_details: {
+    description:
+      'Loads a memory heapsnapshot and returns detailed information about a specific object by its node ID, including size, type, distance, and DOM detachedness. (requires flag: --memoryDebugging=true)',
+    category: 'Memory',
+    args: {
+      filePath: {
+        name: 'filePath',
+        type: 'string',
+        description: 'A path to a .heapsnapshot file to read.',
+        required: true,
+      },
+      nodeId: {
+        name: 'nodeId',
+        type: 'number',
+        description: 'The node ID to get object details for.',
+        required: true,
+      },
+    },
+  },
+  get_heapsnapshot_retainers: {
+    description:
+      'Loads a memory heapsnapshot and returns retainers for a specific node ID. (requires flag: --memoryDebugging=true)',
+    category: 'Memory',
+    args: {
+      filePath: {
+        name: 'filePath',
+        type: 'string',
+        description: 'A path to a .heapsnapshot file to read.',
+        required: true,
+      },
+      nodeId: {
+        name: 'nodeId',
+        type: 'number',
+        description: 'The node ID to get retainers for.',
+        required: true,
+      },
+      pageIdx: {
+        name: 'pageIdx',
+        type: 'number',
+        description: 'The page index for pagination.',
+        required: false,
+      },
+      pageSize: {
+        name: 'pageSize',
+        type: 'number',
+        description: 'The page size for pagination.',
+        required: false,
+      },
+    },
+  },
+  get_heapsnapshot_retaining_paths: {
+    description:
+      'Loads a memory heapsnapshot and returns retaining paths for a specific node ID. This helps to understand why a node is not being garbage collected. (requires flag: --memoryDebugging=true)',
+    category: 'Memory',
+    args: {
+      filePath: {
+        name: 'filePath',
+        type: 'string',
+        description: 'A path to a .heapsnapshot file to read.',
+        required: true,
+      },
+      nodeId: {
+        name: 'nodeId',
+        type: 'number',
+        description: 'The node ID to get retaining paths for.',
+        required: true,
+      },
+      maxDepth: {
+        name: 'maxDepth',
+        type: 'number',
+        description: 'The maximum depth to search for retaining paths.',
+        required: false,
+      },
+      maxNodes: {
+        name: 'maxNodes',
+        type: 'number',
+        description: 'The maximum number of nodes to return.',
+        required: false,
+      },
+      maxSiblings: {
+        name: 'maxSiblings',
+        type: 'number',
+        description: 'The maximum number of siblings to return.',
+        required: false,
+      },
+    },
+  },
+  get_heapsnapshot_summary: {
+    description:
+      'Loads a memory heapsnapshot and returns snapshot summary stats, including native contexts and their sizes, and retained by context summary. (requires flag: --memoryDebugging=true)',
+    category: 'Memory',
+    args: {
+      filePath: {
+        name: 'filePath',
+        type: 'string',
+        description: 'A path to a .heapsnapshot file to read.',
+        required: true,
       },
     },
   },
@@ -332,35 +664,17 @@ export const commands: Commands = {
       },
     },
   },
-  get_nodes_by_class: {
+  get_os_app_state: {
     description:
-      'Loads a memory heapsnapshot and returns instances of a specific class with their stable IDs. (requires flag: --experimentalMemory=true)',
-    category: 'Memory',
+      'Returns the OS integration state (badge count and registered file handlers) for an installed web app, identified by its manifest ID. (requires flag: --categoryPwa=true)',
+    category: 'Progressive Web Apps',
     args: {
-      filePath: {
-        name: 'filePath',
+      manifestId: {
+        name: 'manifestId',
         type: 'string',
-        description: 'A path to a .heapsnapshot file to read.',
-        required: true,
-      },
-      uid: {
-        name: 'uid',
-        type: 'number',
         description:
-          'The unique UID for the class, obtained from aggregates listing.',
+          'The manifest ID of the web app: the resolved `id` member of its manifest. If `id` is omitted, it defaults to the resolved `start_url` (e.g. "https://example.com/"). See https://w3c.github.io/manifest/#id-member.',
         required: true,
-      },
-      pageIdx: {
-        name: 'pageIdx',
-        type: 'number',
-        description: 'The page index for pagination.',
-        required: false,
-      },
-      pageSize: {
-        name: 'pageSize',
-        type: 'number',
-        description: 'The page size for pagination.',
-        required: false,
       },
     },
   },
@@ -417,6 +731,56 @@ export const commands: Commands = {
       },
     },
   },
+  install_pwa: {
+    description:
+      'Installs a Progressive Web App (PWA) identified by its manifest ID. This installs through the PWA CDP domain without a user gesture or install dialog. DevTools installs default to browser display mode. (requires flag: --categoryPwa=true)',
+    category: 'Progressive Web Apps',
+    args: {
+      manifestId: {
+        name: 'manifestId',
+        type: 'string',
+        description:
+          'The manifest ID of the web app: the resolved `id` member of its manifest. If `id` is omitted, it defaults to the resolved `start_url` (e.g. "https://example.com/"). See https://w3c.github.io/manifest/#id-member.',
+        required: true,
+      },
+      installUrlOrBundleUrl: {
+        name: 'installUrlOrBundleUrl',
+        type: 'string',
+        description:
+          'The location of the app or bundle. For a normal site this is the page URL; for an Isolated Web App it can be a file:// or http(s):// signed web bundle.',
+        required: true,
+      },
+      displayMode: {
+        name: 'displayMode',
+        type: 'string',
+        description:
+          'Optional user display mode preference applied after install. "standalone" opens the app in its own window; "browser" opens it as a tab. Installs via the PWA CDP domain default to "browser" because they do not simulate the install dialog, so pass "standalone" to get an app-window experience.',
+        required: false,
+        enum: ['standalone', 'browser'],
+      },
+    },
+  },
+  launch_pwa: {
+    description:
+      'Launches an installed Progressive Web App using its saved display mode. Optionally opens a specific URL within the same app instead of the default start URL. (requires flag: --categoryPwa=true)',
+    category: 'Progressive Web Apps',
+    args: {
+      manifestId: {
+        name: 'manifestId',
+        type: 'string',
+        description:
+          'The manifest ID of the web app: the resolved `id` member of its manifest. If `id` is omitted, it defaults to the resolved `start_url` (e.g. "https://example.com/"). See https://w3c.github.io/manifest/#id-member.',
+        required: true,
+      },
+      url: {
+        name: 'url',
+        type: 'string',
+        description:
+          'Optional URL within the app to open instead of the default start URL.',
+        required: false,
+      },
+    },
+  },
   lighthouse_audit: {
     description:
       'Get Lighthouse score and reports for accessibility, SEO, best practices, and agentic browsing. This excludes performance. For performance audits, run performance_start_trace',
@@ -449,7 +813,7 @@ export const commands: Commands = {
   },
   list_3p_developer_tools: {
     description:
-      "Lists all third-party developer tools the page exposes for providing runtime information.\n  Third-party developer tools can be called via the 'execute_3p_developer_tool()' MCP tool.\n  Alternatively, third-party developer tools can be executed by calling 'evaluate_script' and adding the\n  following command to the script:\n  'window.__dtmcp.executeTool(toolName, params)'\n  This might be helpful when the third-party developer tools return non-serializable values or when composing\n  third-party developer tools with additional functionality. (requires flag: --categoryExperimentalThirdParty=true)",
+      "Lists all third-party developer tools the page exposes for providing runtime information.\nThird-party developer tools can be called via the 'execute_3p_developer_tool()' MCP tool.\nAlternatively, third-party developer tools can be executed by calling 'evaluate_script' and adding the\nfollowing command to the script:\n`window.__dtmcp.executeTool(toolName, params)`\nThis might be helpful when the third-party developer tools return non-serializable values or when composing\nthird-party developer tools with additional functionality. (requires flag: --categoryExperimentalThirdParty=true)",
     category: 'Third-party',
     args: {},
   },
@@ -487,6 +851,21 @@ export const commands: Commands = {
         required: false,
         default: false,
       },
+      includeStackTraces: {
+        name: 'includeStackTraces',
+        type: 'boolean',
+        description:
+          'Set to true to include the stack trace for each message when available. Increases the response size.',
+        required: false,
+        default: false,
+      },
+      serviceWorkerId: {
+        name: 'serviceWorkerId',
+        type: 'string',
+        description:
+          'Filter messages to only return messages of the specified service worker.',
+        required: false,
+      },
     },
   },
   list_extensions: {
@@ -497,7 +876,7 @@ export const commands: Commands = {
   },
   list_network_requests: {
     description:
-      'List all requests for the currently selected page since the last navigation.',
+      'Lists the most recent requests for the currently selected page since the last navigation.',
     category: 'Network',
     args: {
       pageSize: {
@@ -542,19 +921,6 @@ export const commands: Commands = {
     category: 'WebMCP',
     args: {},
   },
-  load_memory_snapshot: {
-    description:
-      'Loads a memory heapsnapshot and returns snapshot summary stats. (requires flag: --experimentalMemory=true)',
-    category: 'Memory',
-    args: {
-      filePath: {
-        name: 'filePath',
-        type: 'string',
-        description: 'A path to a .heapsnapshot file to read.',
-        required: true,
-      },
-    },
-  },
   navigate_page: {
     description:
       'Go to a URL, or back, forward, or reload. Use project URL if not specified otherwise.',
@@ -586,7 +952,7 @@ export const commands: Commands = {
         description:
           'Whether to auto accept or beforeunload dialogs triggered by this navigation. Default is accept.',
         required: false,
-        enum: ['accept', 'decline'],
+        enum: ['accept', 'dismiss'],
       },
       initScript: {
         name: 'initScript',
@@ -868,7 +1234,7 @@ export const commands: Commands = {
       },
     },
   },
-  take_memory_snapshot: {
+  take_heapsnapshot: {
     description:
       'Capture a heap snapshot of the currently selected page. Use to analyze the memory distribution of JavaScript objects and debug memory leaks.',
     category: 'Memory',
@@ -991,6 +1357,20 @@ export const commands: Commands = {
       },
     },
   },
+  uninstall_pwa: {
+    description:
+      'Uninstalls a Progressive Web App identified by its manifest ID and closes any open app windows. (requires flag: --categoryPwa=true)',
+    category: 'Progressive Web Apps',
+    args: {
+      manifestId: {
+        name: 'manifestId',
+        type: 'string',
+        description:
+          'The manifest ID of the web app: the resolved `id` member of its manifest. If `id` is omitted, it defaults to the resolved `start_url` (e.g. "https://example.com/"). See https://w3c.github.io/manifest/#id-member.',
+        required: true,
+      },
+    },
+  },
   upload_file: {
     description: 'Upload a file through a provided element.',
     category: 'Input automation',
@@ -1002,10 +1382,11 @@ export const commands: Commands = {
           'The uid of the file input element or an element that will open file chooser on the page from the page content snapshot',
         required: true,
       },
-      filePath: {
-        name: 'filePath',
-        type: 'string',
-        description: 'The local path of the file to upload',
+      filePaths: {
+        name: 'filePaths',
+        type: 'array',
+        description:
+          'One or more files paths to upload. File paths have to be local to the browser instance (not the MCP).',
         required: true,
       },
       includeSnapshot: {

@@ -7,7 +7,6 @@
 import assert from 'node:assert';
 import {describe, it} from 'node:test';
 
-import type {ParsedArguments} from '../../src/bin/chrome-devtools-mcp-cli-options.js';
 import type {McpPage} from '../../src/McpPage.js';
 import {listPages, navigatePage, selectPage} from '../../src/tools/pages.js';
 import {executeWebMcpTool} from '../../src/tools/webmcp.js';
@@ -18,7 +17,10 @@ describe('webmcp', () => {
     it('list webmcp tools in navigate_page response', async () => {
       await withMcpContext(async (response, context) => {
         await navigatePage().handler(
-          {params: {url: 'about:blank'}, page: context.getSelectedMcpPage()},
+          {
+            params: {url: 'data:text/html,<html></html>'},
+            page: context.getSelectedMcpPage(),
+          },
           response,
           context,
         );
@@ -35,8 +37,7 @@ describe('webmcp', () => {
 
     it('list webmcp tools in select_page response', async () => {
       await withMcpContext(async (response, context) => {
-        const pageId =
-          context.getPageId(context.getSelectedMcpPage().pptrPage) ?? 1;
+        const pageId = context.getSelectedMcpPage().id ?? 1;
         await selectPage.handler({params: {pageId}}, response, context);
         assert.ok(response.listWebMcpTools);
       });
@@ -60,12 +61,17 @@ describe('webmcp', () => {
       );
     }
 
-    // TODO: Remove `.skip` once Chrome 149 reaches stable channel.
-    it.skip('executes a tool successfully', async () => {
+    it('executes a tool successfully', async () => {
       await withMcpContext(
         async (response, context) => {
           const page = context.getSelectedMcpPage();
+          const toolsAddedPromise = new Promise(resolve => {
+            page.pptrPage.webmcp.once('toolsadded', resolve);
+          });
           await setupWebMcpTool(page);
+
+          // Wait for WebMCP tools to be registered and detected by Puppeteer
+          await toolsAddedPromise;
 
           await executeWebMcpTool.handler(
             {params: {toolName: 'test_tool', input: JSON.stringify({})}, page},
@@ -77,8 +83,8 @@ describe('webmcp', () => {
             JSON.stringify({status: 'Completed', output: 'hello'}, null, 2),
           );
         },
-        {args: ['--enable-features=WebMCPTesting,DevToolsWebMCPSupport']},
-        {categoryExperimentalWebmcp: true} as ParsedArguments,
+        {args: ['--enable-features=WebMCP,DevToolsWebMCPSupport']},
+        {categoryExperimentalWebmcp: true},
       );
     });
 
@@ -99,8 +105,8 @@ describe('webmcp', () => {
             {message: /Tool missing-tool not found/},
           );
         },
-        {args: ['--enable-features=WebMCPTesting,DevToolsWebMCPSupport']},
-        {categoryExperimentalWebmcp: true} as ParsedArguments,
+        {args: ['--enable-features=WebMCP,DevToolsWebMCPSupport']},
+        {categoryExperimentalWebmcp: true},
       );
     });
 
@@ -124,8 +130,8 @@ describe('webmcp', () => {
             },
           );
         },
-        {args: ['--enable-features=WebMCPTesting,DevToolsWebMCPSupport']},
-        {categoryExperimentalWebmcp: true} as ParsedArguments,
+        {args: ['--enable-features=WebMCP,DevToolsWebMCPSupport']},
+        {categoryExperimentalWebmcp: true},
       );
     });
   });

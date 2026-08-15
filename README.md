@@ -192,11 +192,19 @@ If you run into any issues, checkout our [troubleshooting guide](./docs/troubles
   - [`take_snapshot`](docs/tool-reference.md#take_snapshot)
   - [`screencast_start`](docs/tool-reference.md#screencast_start)
   - [`screencast_stop`](docs/tool-reference.md#screencast_stop)
-- **Memory** (4 tools)
-  - [`take_memory_snapshot`](docs/tool-reference.md#take_memory_snapshot)
-  - [`get_memory_snapshot_details`](docs/tool-reference.md#get_memory_snapshot_details)
-  - [`get_nodes_by_class`](docs/tool-reference.md#get_nodes_by_class)
-  - [`load_memory_snapshot`](docs/tool-reference.md#load_memory_snapshot)
+- **Memory** (12 tools)
+  - [`take_heapsnapshot`](docs/tool-reference.md#take_heapsnapshot)
+  - [`close_heapsnapshot`](docs/tool-reference.md#close_heapsnapshot)
+  - [`compare_heapsnapshots`](docs/tool-reference.md#compare_heapsnapshots)
+  - [`get_heapsnapshot_class_nodes`](docs/tool-reference.md#get_heapsnapshot_class_nodes)
+  - [`get_heapsnapshot_details`](docs/tool-reference.md#get_heapsnapshot_details)
+  - [`get_heapsnapshot_dominators`](docs/tool-reference.md#get_heapsnapshot_dominators)
+  - [`get_heapsnapshot_duplicate_strings`](docs/tool-reference.md#get_heapsnapshot_duplicate_strings)
+  - [`get_heapsnapshot_edges`](docs/tool-reference.md#get_heapsnapshot_edges)
+  - [`get_heapsnapshot_object_details`](docs/tool-reference.md#get_heapsnapshot_object_details)
+  - [`get_heapsnapshot_retainers`](docs/tool-reference.md#get_heapsnapshot_retainers)
+  - [`get_heapsnapshot_retaining_paths`](docs/tool-reference.md#get_heapsnapshot_retaining_paths)
+  - [`get_heapsnapshot_summary`](docs/tool-reference.md#get_heapsnapshot_summary)
 - **Opera** (5 tools)
   - [`opera_chat`](docs/tool-reference.md#opera_chat)
   - [`opera_do`](docs/tool-reference.md#opera_do)
@@ -215,6 +223,11 @@ If you run into any issues, checkout our [troubleshooting guide](./docs/troubles
 - **WebMCP** (2 tools)
   - [`execute_webmcp_tool`](docs/tool-reference.md#execute_webmcp_tool)
   - [`list_webmcp_tools`](docs/tool-reference.md#list_webmcp_tools)
+- **Progressive Web Apps** (4 tools)
+  - [`get_os_app_state`](docs/tool-reference.md#get_os_app_state)
+  - [`install_pwa`](docs/tool-reference.md#install_pwa)
+  - [`launch_pwa`](docs/tool-reference.md#launch_pwa)
+  - [`uninstall_pwa`](docs/tool-reference.md#uninstall_pwa)
 
 <!-- END AUTO GENERATED TOOLS -->
 
@@ -232,14 +245,17 @@ The Opera DevTools MCP server supports the following configuration options:
 - **`--browserUrl`/ `--browser-url`, `-u`**
   Connect to a running, debuggable Chrome instance (e.g. `http://127.0.0.1:9222`). For more details see: https://github.com/operasoftware/opera-devtools-mcp#connecting-to-a-running-chrome-instance.
   - **Type:** string
+  - **Default:** `false`
 
 - **`--wsEndpoint`/ `--ws-endpoint`, `-w`**
   WebSocket endpoint to connect to a running Chrome instance (e.g., ws://127.0.0.1:9222/devtools/browser/<id>). Alternative to --browserUrl.
   - **Type:** string
+  - **Default:** `false`
 
 - **`--wsHeaders`/ `--ws-headers`**
   Custom headers for WebSocket connection in JSON format (e.g., '{"Authorization":"Bearer token"}'). Only works with --wsEndpoint.
   - **Type:** string
+  - **Default:** `false`
 
 - **`--headless`**
   Whether to run in headless (no UI) mode.
@@ -249,59 +265,108 @@ The Opera DevTools MCP server supports the following configuration options:
 - **`--executablePath`/ `--executable-path`, `-e`**
   Path to custom Chrome executable.
   - **Type:** string
+  - **Default:** `false`
 
 - **`--isolated`**
   If specified, creates a temporary user-data-dir that is automatically cleaned up after the browser is closed. Defaults to false.
   - **Type:** boolean
+  - **Default:** `false`
 
 - **`--userDataDir`/ `--user-data-dir`**
   Path to the user data directory for Chrome. Default is $HOME/.cache/opera-devtools-mcp/chrome-profile$CHANNEL_SUFFIX_IF_NON_STABLE
   - **Type:** string
+  - **Default:** `false`
 
 - **`--channel`**
   Specify a different Chrome channel that should be used. The default is the stable channel version.
   - **Type:** string
   - **Choices:** `canary`, `dev`, `beta`, `stable`
+  - **Default:** `false`
 
 - **`--logFile`/ `--log-file`**
   Path to a file to write debug logs to. Set the env variable `DEBUG` to `*` to enable verbose logs. Useful for submitting bug reports.
   - **Type:** string
+  - **Default:** `false`
 
 - **`--viewport`**
   Initial viewport size for the Chrome instances started by the server. For example, `1280x720`. In headless mode, max size is 3840x2160px.
   - **Type:** string
+  - **Default:** `false`
 
 - **`--proxyServer`/ `--proxy-server`**
   Proxy server configuration for Chrome passed as --proxy-server when launching the browser. See https://www.chromium.org/developers/design-documents/network-settings/ for details.
   - **Type:** string
+  - **Default:** `false`
 
 - **`--acceptInsecureCerts`/ `--accept-insecure-certs`**
   If enabled, ignores errors relative to self-signed and expired certificates. Use with caution.
   - **Type:** boolean
+  - **Default:** `false`
+
+- **`--experimentalPageIdRouting`/ `--experimental-page-id-routing`**
+  Whether to expose pageId on page-scoped tools and route requests by page ID (useful for concurrent agent sessions).
+  - **Type:** boolean
+  - **Default:** `false`
+
+- **`--experimentalDevtools`/ `--experimental-devtools`**
+  Whether to enable automation over DevTools targets
+  - **Type:** boolean
+  - **Default:** `false`
 
 - **`--experimentalVision`/ `--experimental-vision`**
   Whether to enable coordinate-based tools such as click_at(x,y). Usually requires a computer-use model able to produce accurate coordinates by looking at screenshots.
   - **Type:** boolean
+  - **Default:** `false`
+
+- **`--memoryDebugging`/ `--memory-debugging`, `-experimentalMemory`**
+  Whether to enable memory debugging tools.
+  - **Type:** boolean
+  - **Default:** `false`
+
+- **`--experimentalStructuredContent`/ `--experimental-structured-content`**
+  Whether to output structured formatted content.
+  - **Type:** boolean
+  - **Default:** `false`
+
+- **`--experimentalIncludeAllPages`/ `--experimental-include-all-pages`**
+  Whether to include all kinds of pages such as webviews or background pages as pages.
+  - **Type:** boolean
+  - **Default:** `false`
 
 - **`--experimentalScreencast`/ `--experimental-screencast`**
   Exposes experimental screencast tools (requires ffmpeg). Install ffmpeg https://www.ffmpeg.org/download.html and ensure it is available in the MCP server PATH.
   - **Type:** boolean
+  - **Default:** `false`
 
 - **`--experimentalFfmpegPath`/ `--experimental-ffmpeg-path`**
   Path to ffmpeg executable for screencast recording.
   - **Type:** string
+  - **Default:** `false`
 
 - **`--categoryExperimentalWebmcp`/ `--category-experimental-webmcp`**
-  Set to true to enable debugging WebMCP tools. Requires Chrome 149+ with the following flags: `--enable-features=WebMCPTesting,DevToolsWebMCPSupport`
+  Set to true to enable debugging WebMCP tools. Requires Chrome 150+ with the following flag: `--enable-features=WebMCP`
   - **Type:** boolean
+  - **Default:** `false`
 
 - **`--chromeArg`/ `--chrome-arg`**
   Additional arguments for Chrome. Only applies when Chrome is launched by opera-devtools-mcp.
   - **Type:** array
+  - **Default:** `false`
+
+- **`--blockedUrlPattern`/ `--blocked-url-pattern`**
+  Restricts browser's network access by blocking specified URL patterns (uses https://urlpattern.spec.whatwg.org/). Silently detaches from targets with blocked URLs upon connection, and blocks runtime requests (including navigations and subresources). Accepts an array of patterns.
+  - **Type:** array
+  - **Default:** `false`
+
+- **`--allowedUrlPattern`/ `--allowed-url-pattern`**
+  Restricts browser's network access by allowing only specified URL patterns (uses https://urlpattern.spec.whatwg.org/). Requires Chrome 149+. Silently detaches from targets with unallowed URLs upon connection, and blocks runtime requests (including navigations and subresources). Accepts an array of patterns.
+  - **Type:** array
+  - **Default:** `false`
 
 - **`--ignoreDefaultChromeArg`/ `--ignore-default-chrome-arg`**
   Explicitly disable default arguments for Chrome. Only applies when Chrome is launched by opera-devtools-mcp.
   - **Type:** array
+  - **Default:** `false`
 
 - **`--categoryEmulation`/ `--category-emulation`**
   Set to false to exclude tools related to emulation.
@@ -328,6 +393,11 @@ The Opera DevTools MCP server supports the following configuration options:
   - **Type:** boolean
   - **Default:** `false`
 
+- **`--categoryPwa`/ `--category-pwa`**
+  Set to true to include tools for automating Progressive Web Apps (install, launch, uninstall, and OS state). This feature is only supported with a pipe connection; autoConnect, browserUrl, and wsEndpoint are not supported.
+  - **Type:** boolean
+  - **Default:** `false`
+
 - **`--performanceCrux`/ `--performance-crux`**
   Set to true to enable sending URLs from performance traces to CrUX API to get field performance data.
   - **Type:** boolean
@@ -338,12 +408,39 @@ The Opera DevTools MCP server supports the following configuration options:
   - **Type:** boolean
   - **Default:** `false`
 
+- **`--screenshotFormat`/ `--screenshot-format`**
+  Override the default output format used by take_screenshot when the caller does not specify one. JPEG and WebP are ~3-5x smaller than PNG, which helps reduce context size in AI conversations. Unset preserves the existing default ("png").
+  - **Type:** string
+  - **Choices:** `jpeg`, `png`, `webp`
+  - **Default:** `false`
+
+- **`--screenshotQuality`/ `--screenshot-quality`**
+  Override the default compression quality (0-100) used by take_screenshot for JPEG and WebP when the caller does not specify one. Lower values mean smaller files. Ignored for PNG. Unset preserves the Puppeteer default.
+  - **Type:** number
+  - **Default:** `false`
+
+- **`--screenshotMaxWidth`/ `--screenshot-max-width`**
+  Maximum width in pixels for screenshots. If the captured image is wider, it is downscaled (preserving aspect ratio) before being returned. Reduces context size in AI conversations. Unset means no resize.
+  - **Type:** number
+  - **Default:** `false`
+
+- **`--screenshotMaxHeight`/ `--screenshot-max-height`**
+  Maximum height in pixels for screenshots. If the captured image is taller, it is downscaled (preserving aspect ratio) before being returned. Can be combined with --screenshot-max-width; the smaller scale factor wins. Unset means no resize.
+  - **Type:** number
+  - **Default:** `false`
+
 - **`--slim`**
   Exposes a "slim" set of 3 tools covering navigation, script execution and screenshots only. Useful for basic browser tasks.
   - **Type:** boolean
+  - **Default:** `false`
 
 - **`--redactNetworkHeaders`/ `--redact-network-headers`**
-  If true, redacts some of the network headers considered senstive before returning to the client.
+  If true, redacts some of the network headers considered sensitive before returning to the client.
+  - **Type:** boolean
+  - **Default:** `false`
+
+- **`--allowUnrestrictedPaths`/ `--allow-unrestricted-paths`**
+  If set, disables the default path restriction that applies when the MCP client does not negotiate the roots capability. By default, file-writing tools are restricted to the OS temp directory when no roots are configured. Use this only when connecting a trusted local client that does not implement MCP roots and requires access to paths outside the temp directory.
   - **Type:** boolean
   - **Default:** `false`
 

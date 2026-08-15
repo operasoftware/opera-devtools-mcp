@@ -34,7 +34,7 @@ const FILTERABLE_RESOURCE_TYPES: readonly [ResourceType, ...ResourceType[]] = [
 
 export const listNetworkRequests = definePageTool({
   name: 'list_network_requests',
-  description: `List all requests for the currently selected page since the last navigation.`,
+  description: `Lists the most recent requests for the currently selected page since the last navigation.`,
   annotations: {
     category: ToolCategory.NETWORK,
     readOnlyHint: true,
@@ -71,11 +71,12 @@ export const listNetworkRequests = definePageTool({
       ),
   },
   blockedByDialog: false,
-  handler: async (request, response, context) => {
+  verifyFilesSchema: {},
+  handler: async (request, response) => {
     const data = await request.page.getDevToolsData();
     response.attachDevToolsData(data);
     const reqid = data?.cdpRequestId
-      ? context.resolveCdpRequestId(request.page, data.cdpRequestId)
+      ? request.page.resolveCdpRequestId(data.cdpRequestId)
       : undefined;
     response.setIncludeNetworkRequests(true, {
       pageSize: request.params.pageSize,
@@ -115,9 +116,11 @@ export const getNetworkRequest = definePageTool({
       ),
   },
   blockedByDialog: true,
-  handler: async (request, response, context) => {
-    context.validatePath(request.params.requestFilePath);
-    context.validatePath(request.params.responseFilePath);
+  verifyFilesSchema: {
+    requestFilePath: true,
+    responseFilePath: true,
+  },
+  handler: async (request, response) => {
     if (request.params.reqid) {
       response.attachNetworkRequest(request.params.reqid, {
         requestFilePath: request.params.requestFilePath,
@@ -127,7 +130,7 @@ export const getNetworkRequest = definePageTool({
       const data = await request.page.getDevToolsData();
       response.attachDevToolsData(data);
       const reqid = data?.cdpRequestId
-        ? context.resolveCdpRequestId(request.page, data.cdpRequestId)
+        ? request.page.resolveCdpRequestId(data.cdpRequestId)
         : undefined;
       if (reqid) {
         response.attachNetworkRequest(reqid, {

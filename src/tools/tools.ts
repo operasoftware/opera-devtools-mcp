@@ -18,6 +18,7 @@ import * as memoryTools from './memory.js';
 import * as networkTools from './network.js';
 import * as pagesTools from './pages.js';
 import * as performanceTools from './performance.js';
+import * as pwaTools from './pwa.js';
 import * as screencastTools from './screencast.js';
 import * as screenshotTools from './screenshot.js';
 import * as scriptTools from './script.js';
@@ -41,6 +42,7 @@ export const createTools = (args: ParsedArguments) => {
         ...Object.values(operaTools),
         ...Object.values(pagesTools),
         ...Object.values(performanceTools),
+        ...Object.values(pwaTools),
         ...Object.values(screencastTools),
         ...Object.values(screenshotTools),
         ...Object.values(scriptTools),
