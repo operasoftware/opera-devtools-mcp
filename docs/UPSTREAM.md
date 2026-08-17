@@ -80,7 +80,7 @@ a result:
 | `src/tools/categories.ts`                                      | `OPERA` enum member + label                                                                                                                     | yes                               |
 | `src/tools/tools.ts`                                           | Registers the Opera tools                                                                                                                       | yes                               |
 | `eslint.config.js`                                             | `enforce-zod-schema` glob also covers `src/opera/tools/**`                                                                                      | yes                               |
-| `src/browser.ts`                                               | Adds `getCurrentBrowser()` / `closeBrowserIfOpen()` exports alongside upstream's `closeBrowser`                                               | yes                               |
+| `src/browser.ts`                                               | Adds `getCurrentBrowser()` / `closeBrowserIfOpen()` exports alongside upstream's `closeBrowser`                                                 | yes                               |
 | `src/McpResponse.ts`                                           | `sendLog()` + optional `logCallback` ctor arg                                                                                                   | yes (local only)                  |
 | `src/tools/ToolDefinition.ts`                                  | `sendLog` on `Response`; `signal?: AbortSignal` on `Request`                                                                                    | yes (local only)                  |
 | `src/daemon/utils.ts`                                          | App name + index script path from branding                                                                                                      | yes                               |
@@ -90,7 +90,7 @@ a result:
 | `src/bin/chrome-devtools-mcp-main.ts`                          | Branding strings; calls `enforceTelemetryPolicy()` from `opera/policy.ts`                                                                       | yes                               |
 | `src/bin/chrome-devtools-mcp.ts`, `src/bin/chrome-devtools.ts` | Branding strings                                                                                                                                | yes                               |
 | `scripts/generate-cli.ts`                                      | Opera attribution in the file header and in the generated-file header template                                                                  | yes                               |
-| `scripts/test.js`                                                | Opera env var keys                                                                                                                             | yes                               |
+| `scripts/test.js`                                              | Opera env var keys                                                                                                                              | yes                               |
 | `tsconfig.json`                                                | `ESNext.Iterator`/`ESNext.Collection` → `ES2025.*`                                                                                              | **temporary** — TS lib workaround |
 
 ### Upstream tests we modify
@@ -99,14 +99,14 @@ These are name changes, not behaviour changes: the fork's binary, package and en
 so the assertion strings do too. A test that needs a behavioural change indicates the seam is in the
 wrong place.
 
-| Path                              | Divergence                                                                                |
-| --------------------------------- | ----------------------------------------------------------------------------------------- |
-| `tests/utils.ts`                  | `CLI_PATH` and the daemon status strings use the Opera names                              |
-| `tests/index.test.ts`             | Opera bin path + env var key                                                              |
-| `tests/cli.test.ts`               | Opera package name; `performanceCrux`/`usageStatistics` expected to default to `false`    |
-| `tests/utils/check-for-updates.test.ts`                          | Opera env var key; drops upstream's downgrade case (see `src/utils/check-for-updates.ts`) |
-| `tests/daemon/utils.test.ts`                                    | `APP_NAME` uses the Opera package name                                                       |
-| `tests/ToolHandler.test.ts`       | Opera env var keys, plus coverage for the `OperaToolHooks` seam                           |
+| Path                                    | Divergence                                                                                |
+| --------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `tests/utils.ts`                        | `CLI_PATH` and the daemon status strings use the Opera names                              |
+| `tests/index.test.ts`                   | Opera bin path + env var key                                                              |
+| `tests/cli.test.ts`                     | Opera package name; `performanceCrux`/`usageStatistics` expected to default to `false`    |
+| `tests/utils/check-for-updates.test.ts` | Opera env var key; drops upstream's downgrade case (see `src/utils/check-for-updates.ts`) |
+| `tests/daemon/utils.test.ts`            | `APP_NAME` uses the Opera package name                                                    |
+| `tests/ToolHandler.test.ts`             | Opera env var keys, plus coverage for the `OperaToolHooks` seam                           |
 
 ### Upstream files we rename or delete
 
