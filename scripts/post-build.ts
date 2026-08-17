@@ -179,6 +179,28 @@ export const ExperimentName = {
   }
 
   copyDevToolsDescriptionFiles();
+  makeBinScriptsExecutable();
+}
+
+/**
+ * Makes generated JS bin scripts executable so they can be run directly (and
+ * via `npm link` symlinks). tsc does not preserve source file permissions.
+ */
+function makeBinScriptsExecutable(): void {
+  const binDir = path.join(BUILD_DIR, 'src', 'bin');
+  if (!fs.existsSync(binDir)) {
+    return;
+  }
+  for (const entry of fs.readdirSync(binDir)) {
+    if (!entry.endsWith('.js')) {
+      continue;
+    }
+    const filePath = path.join(binDir, entry);
+    const content = fs.readFileSync(filePath, 'utf-8');
+    if (content.startsWith('#!')) {
+      fs.chmodSync(filePath, 0o755);
+    }
+  }
 }
 
 function copyDevToolsDescriptionFiles(): void {
