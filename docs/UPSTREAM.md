@@ -130,11 +130,10 @@ resolve by hand, keeping the Opera side.
 
 `README.md`, `CHANGELOG.md`, `.gitignore`, `.gitattributes`, `docs/troubleshooting.md`,
 `docs/UPSTREAM.md`, `package.json`, `server.json`, `.github/workflows/*`,
-`.github/plugin/plugin.json`, `release-please-config.json`, `.release-please-manifest.json`, `src/version.ts`,
-`.claude-plugin/*`, `NOTICE`.
+`.github/plugin/plugin.json`, `src/version.ts`, `.claude-plugin/*`, `NOTICE`.
 
-`src/version.ts` and `.release-please-manifest.json` carry the fork's own version line, which is
-independent of upstream's. Release-please owns both.
+`src/version.ts` carries the fork's own version line, which is independent of upstream's.
+The fork publishes to npm on release tags via the `publish-on-tag` workflow (OIDC).
 
 ## Deliberately NOT upstreamed
 

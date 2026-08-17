@@ -1,6 +1,12 @@
 # Build output
 build/
 
+# Local npm pack artifacts
+*.tgz
+
+# Local agent / tooling dirs (note: .claude-plugin/ is tracked and stays)
+.claude/
+
 # Dependencies
 node_modules/
 yarn.lock
