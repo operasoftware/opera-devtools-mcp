@@ -18,6 +18,7 @@ import {
   showUsageStatisticsDisclaimer,
 } from './opera/policy.js';
 import {createOperaToolHooks} from './opera/toolHandlerHooks.js';
+import {buildLaunchOptions} from './opera/browserLaunch.js';
 import {ClearcutLogger} from './telemetry/ClearcutLogger.js';
 import {FilePersistence} from './telemetry/persistence.js';
 import {
@@ -128,13 +129,6 @@ export async function createMcpServer(
 
   let context: McpContext | undefined;
   async function getContext(): Promise<McpContext> {
-    const chromeArgs: string[] = (serverArgs.chromeArg ?? []).map(String);
-    const ignoreDefaultChromeArgs: string[] = (
-      serverArgs.ignoreDefaultChromeArg ?? []
-    ).map(String);
-    if (serverArgs.proxyServer) {
-      chromeArgs.push(`--proxy-server=${serverArgs.proxyServer}`);
-    }
     const devtools = serverArgs.experimentalDevtools ?? false;
     const blocklist = serverArgs.blockedUrlPattern
       ? serverArgs.blockedUrlPattern.map(String)
@@ -158,23 +152,15 @@ export async function createMcpServer(
             blocklist,
             allowlist,
           })
-        : await ensureBrowserLaunched({
-            headless: serverArgs.headless,
-            executablePath: serverArgs.executablePath,
-            channel: serverArgs.channel as Channel,
-            isolated: serverArgs.isolated ?? false,
-            userDataDir: serverArgs.userDataDir,
-            logFile: options.logFile,
-            viewport: serverArgs.viewport,
-            chromeArgs,
-            ignoreDefaultChromeArgs,
-            acceptInsecureCerts: serverArgs.acceptInsecureCerts,
-            devtools,
-            enableExtensions: serverArgs.categoryExtensions,
-            viaCli: serverArgs.viaCli,
-            blocklist,
-            allowlist,
-          });
+        : await ensureBrowserLaunched(
+            // Pass the already-derived values so the launched browser uses the
+            // exact same flags as the connected branch and `McpContext`.
+            buildLaunchOptions(serverArgs, options.logFile, {
+              devtools,
+              blocklist,
+              allowlist,
+            }),
+          );
 
     if (context?.browser !== browser) {
       context?.dispose();

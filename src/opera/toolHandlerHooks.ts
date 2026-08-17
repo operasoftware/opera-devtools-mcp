@@ -33,7 +33,18 @@ export interface ToolInvocationExtra {
  * three small hook calls instead of a forked copy of the invocation path.
  */
 export interface OperaToolHooks {
-  /** Opera AI tools are long-running; they must not hold the global tool mutex. */
+  /**
+   * Opera AI tools are long-running; they must not hold the global tool mutex.
+   *
+   * INVARIANT: a tool that bypasses the mutex must also tolerate `beforeInvoke`
+   * running concurrently with other tools, because `beforeInvoke` can relaunch
+   * (close and reopen) the shared, module-level browser for the Opera
+   * automation flags. Opera tools relaunch the browser only when *this* tool
+   * needs different flags, but by bypassing the mutex they lose the serialisation
+   * that would otherwise keep them from disrupting an in-flight tool. Keep this
+   * coupling in mind if `bypassMutex` is ever widened beyond the `OPERA`
+   * category.
+   */
   bypassMutex(tool: AnyTool): boolean;
   /** Runs before the context is resolved, so it may relaunch the browser. */
   beforeInvoke(tool: AnyTool): Promise<void>;
