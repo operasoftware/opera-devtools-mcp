@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {ISSUE_UTILS} from '../issue-descriptions.js';
-import {logger} from '../logger.js';
+import {ISSUE_UTILS} from '../devtools/issueDescriptions.js';
 import {DevTools} from '../third_party/index.js';
+import {logger} from '../utils/logger.js';
 
 export interface IssueFormatterOptions {
   requestIdResolver?: (requestId: string) => number | undefined;
@@ -156,7 +156,7 @@ export class IssueFormatter {
     const markdownDescription = this.#issue.getDescription();
     const filename = markdownDescription?.file;
     if (!filename) {
-      logger(`no description found for issue:` + this.#issue.code());
+      logger?.(`no description found for issue:` + this.#issue.code());
       return undefined;
     }
 
@@ -166,7 +166,7 @@ export class IssueFormatter {
 
     const rawMarkdown = ISSUE_UTILS.getIssueDescription(filename);
     if (!rawMarkdown) {
-      logger(`no markdown ${filename} found for issue:` + this.#issue.code());
+      logger?.(`no markdown ${filename} found for issue:` + this.#issue.code());
       return undefined;
     }
 
@@ -180,12 +180,12 @@ export class IssueFormatter {
       const title =
         DevTools.MarkdownIssueDescription.findTitleFromMarkdownAst(markdownAst);
       if (!title) {
-        logger('cannot read issue title from ' + filename);
+        logger?.('cannot read issue title from ' + filename);
         return undefined;
       }
       return title;
     } catch {
-      logger('error parsing markdown for issue ' + this.#issue.code());
+      logger?.('error parsing markdown for issue ' + this.#issue.code());
       return undefined;
     }
   }
@@ -214,7 +214,7 @@ export class IssueFormatter {
 }
 
 function convertIssueConciseToString(issue: IssueConcise): string {
-  return `msgid=${issue.id} [issue] ${issue.title} (count: ${issue.count})`;
+  return `msgid=${issue.id} [issue] ${issue.title ?? 'Unknown Issue'} (count: ${issue.count})`;
 }
 
 function convertIssueDetailedToString(issue: IssueDetailed): string {

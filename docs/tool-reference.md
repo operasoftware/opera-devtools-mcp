@@ -39,11 +39,19 @@
   - [`take_snapshot`](#take_snapshot)
   - [`screencast_start`](#screencast_start)
   - [`screencast_stop`](#screencast_stop)
-- **[Memory](#memory)** (4 tools)
-  - [`take_memory_snapshot`](#take_memory_snapshot)
-  - [`get_memory_snapshot_details`](#get_memory_snapshot_details)
-  - [`get_nodes_by_class`](#get_nodes_by_class)
-  - [`load_memory_snapshot`](#load_memory_snapshot)
+- **[Memory](#memory)** (12 tools)
+  - [`take_heapsnapshot`](#take_heapsnapshot)
+  - [`close_heapsnapshot`](#close_heapsnapshot)
+  - [`compare_heapsnapshots`](#compare_heapsnapshots)
+  - [`get_heapsnapshot_class_nodes`](#get_heapsnapshot_class_nodes)
+  - [`get_heapsnapshot_details`](#get_heapsnapshot_details)
+  - [`get_heapsnapshot_dominators`](#get_heapsnapshot_dominators)
+  - [`get_heapsnapshot_duplicate_strings`](#get_heapsnapshot_duplicate_strings)
+  - [`get_heapsnapshot_edges`](#get_heapsnapshot_edges)
+  - [`get_heapsnapshot_object_details`](#get_heapsnapshot_object_details)
+  - [`get_heapsnapshot_retainers`](#get_heapsnapshot_retainers)
+  - [`get_heapsnapshot_retaining_paths`](#get_heapsnapshot_retaining_paths)
+  - [`get_heapsnapshot_summary`](#get_heapsnapshot_summary)
 - **[Opera](#opera)** (5 tools)
   - [`opera_chat`](#opera_chat)
   - [`opera_do`](#opera_do)
@@ -62,6 +70,11 @@
 - **[WebMCP](#webmcp)** (2 tools)
   - [`execute_webmcp_tool`](#execute_webmcp_tool)
   - [`list_webmcp_tools`](#list_webmcp_tools)
+- **[Progressive Web Apps](#progressive-web-apps)** (4 tools)
+  - [`get_os_app_state`](#get_os_app_state)
+  - [`install_pwa`](#install_pwa)
+  - [`launch_pwa`](#launch_pwa)
+  - [`uninstall_pwa`](#uninstall_pwa)
 
 ## Input automation
 
@@ -162,7 +175,7 @@
 
 **Parameters:**
 
-- **filePath** (string) **(required)**: The local path of the file to upload
+- **filePaths** (array) **(required)**: One or more files paths to upload. File paths have to be local to the browser instance (not the MCP).
 - **uid** (string) **(required)**: The uid of the file input element or an element that will open file chooser on the page from the page content snapshot
 - **includeSnapshot** (boolean) _(optional)_: Whether to include a snapshot in the response. Default is false.
 
@@ -207,7 +220,7 @@
 
 **Parameters:**
 
-- **handleBeforeUnload** (enum: "accept", "decline") _(optional)_: Whether to auto accept or beforeunload dialogs triggered by this navigation. Default is accept.
+- **handleBeforeUnload** (enum: "accept", "dismiss") _(optional)_: Whether to auto accept or beforeunload dialogs triggered by this navigation. Default is accept.
 - **ignoreCache** (boolean) _(optional)_: Whether to ignore cache on reload.
 - **initScript** (string) _(optional)_: A JavaScript script to be executed on each new document before any other scripts for the next navigation.
 - **timeout** (integer) _(optional)_: Maximum wait time in milliseconds. If set to 0, the default timeout will be used.
@@ -261,7 +274,8 @@
 
 - **colorScheme** (enum: "dark", "light", "auto") _(optional)_: [`Emulate`](#emulate) the dark or the light mode. Set to "auto" to reset to the default.
 - **cpuThrottlingRate** (number) _(optional)_: Represents the CPU slowdown factor. Omit or set the rate to 1 to disable throttling
-- **geolocation** (string) _(optional)_: Geolocation (`&lt;latitude&gt;x&lt;longitude&gt;`) to [`emulate`](#emulate). Latitude between -90 and 90. Longitude between -180 and 180. Omit to clear the geolocation override.
+- **extraHttpHeaders** (string) _(optional)_: Extra HTTP headers as a JSON string object, e.g. {"X-Custom": "value", "Authorization": "Bearer token"}. Headers are included into every HTTP request originating from the page and persist across navigations until cleared. Pass an empty string to clear all extra headers.
+- **geolocation** (string) _(optional)_: Geolocation (`&lt;latitude&gt;,&lt;longitude&gt;`) to [`emulate`](#emulate). Latitude between -90 and 90. Longitude between -180 and 180. Omit to clear the geolocation override.
 - **networkConditions** (enum: "Offline", "Slow 3G", "Fast 3G", "Slow 4G", "Fast 4G") _(optional)_: Throttle network. Omit to disable throttling.
 - **userAgent** (string) _(optional)_: User agent to [`emulate`](#emulate). Set to empty string to clear the user agent override.
 - **viewport** (string) _(optional)_: [`Emulate`](#emulate) device viewports '&lt;width&gt;x&lt;height&gt;x&lt;devicePixelRatio&gt;[,mobile][,touch][,landscape]'. 'touch' and 'mobile' to [`emulate`](#emulate) mobile devices. 'landscape' to [`emulate`](#emulate) landscape mode.
@@ -330,7 +344,7 @@
 
 ### `list_network_requests`
 
-**Description:** List all requests for the currently selected page since the last navigation.
+**Description:** Lists the most recent requests for the currently selected page since the last navigation.
 
 **Parameters:**
 
@@ -345,23 +359,18 @@
 
 ### `evaluate_script`
 
-**Description:** Evaluate a JavaScript function inside the currently selected page. Returns the response as JSON,
-so returned values have to be JSON-serializable.
+**Description:** Evaluate a JavaScript function inside the currently selected page. Returns the response as JSON, so returned values have to be JSON-serializable.
 
 **Parameters:**
 
 - **function** (string) **(required)**: A JavaScript function declaration to be executed by the tool in the currently selected page.
-  Example without arguments: `() => {
-  return document.title
-}` or `async () => {
-  return await fetch("example.com")
-}`.
-  Example with arguments: `(el) => {
-  return el.innerText;
-}`
+  Example without arguments: `() => document.title` or `async () => await fetch("example.com")`.
+  Example with arguments: `(el) => el.innerText`
 
 - **args** (array) _(optional)_: An optional list of arguments to pass to the function.
 - **dialogAction** (string) _(optional)_: Handle dialogs while execution. "accept", "dismiss", or string for response of window.prompt. Defaults to accept.
+- **filePath** (string) _(optional)_: The absolute or relative path to a file to save the script output to. If omitted, the output is returned inline.
+- **waitForStableDom** (boolean) _(optional)_: Whether to wait for the DOM to settle. Pass false if the script only reads data. Defaults to true.
 
 ---
 
@@ -394,8 +403,10 @@ so returned values have to be JSON-serializable.
 **Parameters:**
 
 - **includePreservedMessages** (boolean) _(optional)_: Set to true to return the preserved messages over the last 3 navigations.
+- **includeStackTraces** (boolean) _(optional)_: Set to true to include the stack trace for each message when available. Increases the response size.
 - **pageIdx** (integer) _(optional)_: Page number to return (0-based). When omitted, returns the first page.
 - **pageSize** (integer) _(optional)_: Maximum number of messages to return. When omitted, returns all messages.
+- **serviceWorkerId** (string) _(optional)_: Filter messages to only return messages of the specified service worker.
 - **types** (array) _(optional)_: Filter messages to only return messages of the specified resource types. When omitted or empty, returns all messages.
 
 ---
@@ -447,7 +458,7 @@ in the DevTools Elements panel (if any).
 
 ## Memory
 
-### `take_memory_snapshot`
+### `take_heapsnapshot`
 
 **Description:** Capture a heap snapshot of the currently selected page. Use to analyze the memory distribution of JavaScript objects and debug memory leaks.
 
@@ -457,34 +468,137 @@ in the DevTools Elements panel (if any).
 
 ---
 
-### `get_memory_snapshot_details`
+### `close_heapsnapshot`
 
-**Description:** Loads a memory heapsnapshot and returns all available information including statistics, static data, and aggregated node information. Supports pagination for aggregates. (requires flag: --experimentalMemory=true)
+**Description:** Closes a previously loaded memory heapsnapshot, freeing its memory. (requires flag: --memoryDebugging=true)
 
 **Parameters:**
 
-- **filePath** (string) **(required)**: A path to a .heapsnapshot file to read.
-- **pageIdx** (number) _(optional)_: The page index for pagination of aggregates.
-- **pageSize** (number) _(optional)_: The page size for pagination of aggregates.
+- **filePath** (string) **(required)**: A path to the .heapsnapshot file to close.
 
 ---
 
-### `get_nodes_by_class`
+### `compare_heapsnapshots`
 
-**Description:** Loads a memory heapsnapshot and returns instances of a specific class with their stable IDs. (requires flag: --experimentalMemory=true)
+**Description:** Loads two memory heapsnapshots and returns the comparison. If classIndex is provided, returns detailed diff for that class, otherwise returns summary diff. (requires flag: --memoryDebugging=true)
+
+**Parameters:**
+
+- **baseFilePath** (string) **(required)**: A path to the base .heapsnapshot file (earlier snapshot).
+- **currentFilePath** (string) **(required)**: A path to the current .heapsnapshot file (later snapshot).
+- **classIndex** (number) _(optional)_: Optional 0-based index of the class in the summary list to filter results, showing individual objects.
+
+---
+
+### `get_heapsnapshot_class_nodes`
+
+**Description:** Loads a memory heapsnapshot and returns instances of a specific class with their IDs. (requires flag: --memoryDebugging=true)
 
 **Parameters:**
 
 - **filePath** (string) **(required)**: A path to a .heapsnapshot file to read.
-- **uid** (number) **(required)**: The unique UID for the class, obtained from aggregates listing.
+- **id** (number) **(required)**: The ID for the class, obtained from details.
+- **filterName** (enum: "objectsRetainedByDetachedDomNodes", "objectsRetainedByConsole", "objectsRetainedByEventHandlers", "objectsRetainedByContexts", "sharedNativeContext", "noNativeContext", "attributedToSpecificNativeContext") _(optional)_: An optional filter to apply to the nodes.
+- **objectId** (number) _(optional)_: The object ID (nodeId) of the specific native context to filter by when filterName is attributedToSpecificNativeContext.
 - **pageIdx** (number) _(optional)_: The page index for pagination.
 - **pageSize** (number) _(optional)_: The page size for pagination.
 
 ---
 
-### `load_memory_snapshot`
+### `get_heapsnapshot_details`
 
-**Description:** Loads a memory heapsnapshot and returns snapshot summary stats. (requires flag: --experimentalMemory=true)
+**Description:** Loads a memory heapsnapshot and returns all available information including statistics, static data, and aggregated node information. Supports pagination for aggregates. (requires flag: --memoryDebugging=true)
+
+**Parameters:**
+
+- **filePath** (string) **(required)**: A path to a .heapsnapshot file to read.
+- **filterName** (enum: "objectsRetainedByDetachedDomNodes", "objectsRetainedByConsole", "objectsRetainedByEventHandlers", "objectsRetainedByContexts", "sharedNativeContext", "noNativeContext", "attributedToSpecificNativeContext") _(optional)_: An optional filter to apply to the aggregates.
+- **objectId** (number) _(optional)_: The object ID (nodeId) of the specific native context to filter by when filterName is attributedToSpecificNativeContext.
+- **pageIdx** (number) _(optional)_: The page index for pagination of aggregates.
+- **pageSize** (number) _(optional)_: The page size for pagination of aggregates.
+
+---
+
+### `get_heapsnapshot_dominators`
+
+**Description:** Loads a memory heapsnapshot and returns the dominator chain for a specific node ID. This helps to identify which objects are keeping the target node alive. (requires flag: --memoryDebugging=true)
+
+**Parameters:**
+
+- **filePath** (string) **(required)**: A path to a .heapsnapshot file to read.
+- **nodeId** (number) **(required)**: The node ID to get the dominator chain for.
+
+---
+
+### `get_heapsnapshot_duplicate_strings`
+
+**Description:** Loads a memory heapsnapshot and returns duplicate strings grouped by their value. (requires flag: --memoryDebugging=true)
+
+**Parameters:**
+
+- **filePath** (string) **(required)**: A path to a .heapsnapshot file to read.
+- **pageIdx** (number) _(optional)_: The page index for pagination.
+- **pageSize** (number) _(optional)_: The page size for pagination.
+
+---
+
+### `get_heapsnapshot_edges`
+
+**Description:** Loads a memory heapsnapshot and returns outgoing edges (references) for a specific node ID. (requires flag: --memoryDebugging=true)
+
+**Parameters:**
+
+- **filePath** (string) **(required)**: A path to a .heapsnapshot file to read.
+- **nodeId** (number) **(required)**: The node ID to get outgoing edges for.
+- **excludePrimitives** (boolean) _(optional)_: Whether to exclude primitive target nodes. Default is true.
+- **minRetainedSize** (number) _(optional)_: Minimum retained size in bytes for target nodes.
+- **pageIdx** (number) _(optional)_: The page index for pagination.
+- **pageSize** (number) _(optional)_: The page size for pagination.
+- **sortBy** (enum: "retainedSize", "selfSize", "name") _(optional)_: Sort order for edges. Default is retainedSize.
+
+---
+
+### `get_heapsnapshot_object_details`
+
+**Description:** Loads a memory heapsnapshot and returns detailed information about a specific object by its node ID, including size, type, distance, and DOM detachedness. (requires flag: --memoryDebugging=true)
+
+**Parameters:**
+
+- **filePath** (string) **(required)**: A path to a .heapsnapshot file to read.
+- **nodeId** (number) **(required)**: The node ID to get object details for.
+
+---
+
+### `get_heapsnapshot_retainers`
+
+**Description:** Loads a memory heapsnapshot and returns retainers for a specific node ID. (requires flag: --memoryDebugging=true)
+
+**Parameters:**
+
+- **filePath** (string) **(required)**: A path to a .heapsnapshot file to read.
+- **nodeId** (number) **(required)**: The node ID to get retainers for.
+- **pageIdx** (number) _(optional)_: The page index for pagination.
+- **pageSize** (number) _(optional)_: The page size for pagination.
+
+---
+
+### `get_heapsnapshot_retaining_paths`
+
+**Description:** Loads a memory heapsnapshot and returns retaining paths for a specific node ID. This helps to understand why a node is not being garbage collected. (requires flag: --memoryDebugging=true)
+
+**Parameters:**
+
+- **filePath** (string) **(required)**: A path to a .heapsnapshot file to read.
+- **nodeId** (number) **(required)**: The node ID to get retaining paths for.
+- **maxDepth** (number) _(optional)_: The maximum depth to search for retaining paths.
+- **maxNodes** (number) _(optional)_: The maximum number of nodes to return.
+- **maxSiblings** (number) _(optional)_: The maximum number of siblings to return.
+
+---
+
+### `get_heapsnapshot_summary`
+
+**Description:** Loads a memory heapsnapshot and returns snapshot summary stats, including native contexts and their sizes, and retained by context summary. (requires flag: --memoryDebugging=true)
 
 **Parameters:**
 
@@ -617,7 +731,7 @@ in the DevTools Elements panel (if any).
 Third-party developer tools can be called via the '[`execute_3p_developer_tool`](#execute_3p_developer_tool)()' MCP tool.
 Alternatively, third-party developer tools can be executed by calling '[`evaluate_script`](#evaluate_script)' and adding the
 following command to the script:
-'window.\_\_dtmcp.executeTool(toolName, params)'
+`window.__dtmcp.executeTool(toolName, params)`
 This might be helpful when the third-party developer tools return non-serializable values or when composing
 third-party developer tools with additional functionality. (requires flag: --categoryExperimentalThirdParty=true)
 
@@ -645,5 +759,52 @@ third-party developer tools with additional functionality. (requires flag: --cat
 **Description:** Lists all WebMCP tools the page exposes. (requires flag: --categoryExperimentalWebmcp=true)
 
 **Parameters:** None
+
+---
+
+## Progressive Web Apps
+
+> NOTE: The Progressive Web Apps category is not active by default. Use the '--categoryPwa' flag.
+
+### `get_os_app_state`
+
+**Description:** Returns the OS integration state (badge count and registered file handlers) for an installed web app, identified by its manifest ID. (requires flag: --categoryPwa=true)
+
+**Parameters:**
+
+- **manifestId** (string) **(required)**: The manifest ID of the web app: the resolved `id` member of its manifest. If `id` is omitted, it defaults to the resolved `start_url` (e.g. "https://example.com/"). See https://w3c.github.io/manifest/#id-member.
+
+---
+
+### `install_pwa`
+
+**Description:** Installs a Progressive Web App (PWA) identified by its manifest ID. This installs through the PWA CDP domain without a user gesture or install dialog. DevTools installs default to browser display mode. (requires flag: --categoryPwa=true)
+
+**Parameters:**
+
+- **installUrlOrBundleUrl** (string) **(required)**: The location of the app or bundle. For a normal site this is the page URL; for an Isolated Web App it can be a file:// or http(s):// signed web bundle.
+- **manifestId** (string) **(required)**: The manifest ID of the web app: the resolved `id` member of its manifest. If `id` is omitted, it defaults to the resolved `start_url` (e.g. "https://example.com/"). See https://w3c.github.io/manifest/#id-member.
+- **displayMode** (enum: "standalone", "browser") _(optional)_: Optional user display mode preference applied after install. "standalone" opens the app in its own window; "browser" opens it as a tab. Installs via the PWA CDP domain default to "browser" because they do not simulate the install dialog, so pass "standalone" to get an app-window experience.
+
+---
+
+### `launch_pwa`
+
+**Description:** Launches an installed Progressive Web App using its saved display mode. Optionally opens a specific URL within the same app instead of the default start URL. (requires flag: --categoryPwa=true)
+
+**Parameters:**
+
+- **manifestId** (string) **(required)**: The manifest ID of the web app: the resolved `id` member of its manifest. If `id` is omitted, it defaults to the resolved `start_url` (e.g. "https://example.com/"). See https://w3c.github.io/manifest/#id-member.
+- **url** (string) _(optional)_: Optional URL within the app to open instead of the default start URL.
+
+---
+
+### `uninstall_pwa`
+
+**Description:** Uninstalls a Progressive Web App identified by its manifest ID and closes any open app windows. (requires flag: --categoryPwa=true)
+
+**Parameters:**
+
+- **manifestId** (string) **(required)**: The manifest ID of the web app: the resolved `id` member of its manifest. If `id` is omitted, it defaults to the resolved `start_url` (e.g. "https://example.com/"). See https://w3c.github.io/manifest/#id-member.
 
 ---

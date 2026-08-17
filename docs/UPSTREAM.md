@@ -6,7 +6,7 @@
 This document is the registry of every intentional divergence from upstream.
 `scripts/verify-upstream-seam.ts` enforces it: unregistered drift in an upstream-owned file fails CI.
 
-- Current fork base: `dca3c04` (upstream, just after v0.26.0).
+- Current fork base: `ec014d1` (upstream, v1.7.0).
 - Upstream remote: `git remote add upstream https://github.com/ChromeDevTools/chrome-devtools-mcp.git`
 
 ## Intake runbook
@@ -79,11 +79,10 @@ a result:
 | `src/index.ts`                                                 | Builds `operaHooks`, passes them to `ToolHandler`, threads `extra`; `logDisclaimers` uses `opera/policy.ts`                                     | yes                               |
 | `src/tools/categories.ts`                                      | `OPERA` enum member + label                                                                                                                     | yes                               |
 | `src/tools/tools.ts`                                           | Registers the Opera tools                                                                                                                       | yes                               |
-| `eslint.config.mjs`                                            | `enforce-zod-schema` glob also covers `src/opera/tools/**`                                                                                      | yes                               |
-| `src/browser.ts`                                               | Adds `getCurrentBrowser()` / `closeBrowserIfOpen()` exports                                                                                     | yes                               |
+| `eslint.config.js`                                             | `enforce-zod-schema` glob also covers `src/opera/tools/**`                                                                                      | yes                               |
+| `src/browser.ts`                                               | Adds `getCurrentBrowser()` / `closeBrowserIfOpen()` exports alongside upstream's `closeBrowser`                                                 | yes                               |
 | `src/McpResponse.ts`                                           | `sendLog()` + optional `logCallback` ctor arg                                                                                                   | yes (local only)                  |
 | `src/tools/ToolDefinition.ts`                                  | `sendLog` on `Response`; `signal?: AbortSignal` on `Request`                                                                                    | yes (local only)                  |
-| `src/WaitForHelper.ts`                                         | Dialog-watcher fix so `dialogOpened` is set without `handleDialog`                                                                              | yes (local only)                  |
 | `src/daemon/utils.ts`                                          | App name + index script path from branding                                                                                                      | yes                               |
 | `src/utils/check-for-updates.ts`                               | Env key + cache dir from branding                                                                                                               | yes                               |
 | `src/bin/check-latest-version.ts`                              | Package name from branding (keep upstream's `getRegistry()`)                                                                                    | yes                               |
@@ -91,7 +90,7 @@ a result:
 | `src/bin/chrome-devtools-mcp-main.ts`                          | Branding strings; calls `enforceTelemetryPolicy()` from `opera/policy.ts`                                                                       | yes                               |
 | `src/bin/chrome-devtools-mcp.ts`, `src/bin/chrome-devtools.ts` | Branding strings                                                                                                                                | yes                               |
 | `scripts/generate-cli.ts`                                      | Opera attribution in the file header and in the generated-file header template                                                                  | yes                               |
-| `scripts/test.mjs`                                             | Opera env var keys                                                                                                                              | yes                               |
+| `scripts/test.js`                                              | Opera env var keys                                                                                                                              | yes                               |
 | `tsconfig.json`                                                | `ESNext.Iterator`/`ESNext.Collection` → `ES2025.*`                                                                                              | **temporary** — TS lib workaround |
 
 ### Upstream tests we modify
@@ -100,13 +99,14 @@ These are name changes, not behaviour changes: the fork's binary, package and en
 so the assertion strings do too. A test that needs a behavioural change indicates the seam is in the
 wrong place.
 
-| Path                              | Divergence                                                                                |
-| --------------------------------- | ----------------------------------------------------------------------------------------- |
-| `tests/utils.ts`                  | `CLI_PATH` and the daemon status strings use the Opera names                              |
-| `tests/index.test.ts`             | Opera bin path + env var key                                                              |
-| `tests/cli.test.ts`               | Opera package name; `performanceCrux`/`usageStatistics` expected to default to `false`    |
-| `tests/check-for-updates.test.ts` | Opera env var key; drops upstream's downgrade case (see `src/utils/check-for-updates.ts`) |
-| `tests/ToolHandler.test.ts`       | Opera env var keys, plus coverage for the `OperaToolHooks` seam                           |
+| Path                                    | Divergence                                                                                |
+| --------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `tests/utils.ts`                        | `CLI_PATH` and the daemon status strings use the Opera names                              |
+| `tests/index.test.ts`                   | Opera bin path + env var key                                                              |
+| `tests/cli.test.ts`                     | Opera package name; `performanceCrux`/`usageStatistics` expected to default to `false`    |
+| `tests/utils/check-for-updates.test.ts` | Opera env var key; drops upstream's downgrade case (see `src/utils/check-for-updates.ts`) |
+| `tests/daemon/utils.test.ts`            | `APP_NAME` uses the Opera package name                                                    |
+| `tests/ToolHandler.test.ts`             | Opera env var keys, plus coverage for the `OperaToolHooks` seam                           |
 
 ### Upstream files we rename or delete
 
@@ -136,9 +136,10 @@ independent of upstream's. Release-please owns both.
 
 ## Deliberately NOT upstreamed
 
-`sendLog` / MCP logging notifications, the `WaitForHelper` dialog fix, and `signal` on `Request` are
-generic enough to upstream but are kept local by decision. If upstream adds equivalents, delete ours
-rather than keeping both.
+`sendLog` / MCP logging notifications and `signal` on `Request` are generic enough to
+upstream but are kept local by decision. If upstream adds equivalents, delete ours
+rather than keeping both. (The `WaitForHelper` dialog fix was upstreamed as of
+the 1.7.0 intake — the fork's older local copy was deleted.)
 
 ## Measuring the seam
 

@@ -34,8 +34,10 @@ in the DevTools Elements panel (if any).`,
       ),
   },
   blockedByDialog: true,
-  handler: async (request, response, context) => {
-    context.validatePath(request.params.filePath);
+  verifyFilesSchema: {
+    filePath: true,
+  },
+  handler: async (request, response) => {
     response.includeSnapshot({
       verbose: request.params.verbose ?? false,
       filePath: request.params.filePath,
@@ -60,13 +62,10 @@ export const waitFor = definePageTool({
     ...timeoutSchema,
   },
   blockedByDialog: true,
-  handler: async (request, response, context) => {
+  verifyFilesSchema: {},
+  handler: async (request, response) => {
     const page = request.page;
-    await context.waitForTextOnPage(
-      request.params.text,
-      request.params.timeout,
-      page.pptrPage,
-    );
+    await page.waitForTextOnPage(request.params.text, request.params.timeout);
 
     response.appendResponseLine(
       `Element matching one of ${JSON.stringify(request.params.text)} found.`,

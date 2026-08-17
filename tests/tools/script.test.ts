@@ -8,14 +8,18 @@ import assert from 'node:assert';
 import path from 'node:path';
 import {describe, it} from 'node:test';
 
+import sinon from 'sinon';
+
 import type {ParsedArguments} from '../../src/bin/chrome-devtools-mcp-cli-options.js';
 import {TextSnapshot} from '../../src/TextSnapshot.js';
 import {installExtension} from '../../src/tools/extensions.js';
 import {evaluateScript} from '../../src/tools/script.js';
+import {WaitForHelper} from '../../src/utils/WaitForHelper.js';
 import {serverHooks} from '../server.js';
 import {
   assertNoServiceWorkerReported,
   extractExtensionId,
+  getTextContent,
   html,
   withMcpContext,
 } from '../utils.js';
@@ -40,6 +44,56 @@ describe('script', () => {
         );
         const lineEvaluation = response.responseLines.at(2)!;
         assert.strictEqual(JSON.parse(lineEvaluation), 10);
+      });
+    });
+    it('skips the stable DOM wait when waitForStableDom is false', async () => {
+      await withMcpContext(async (response, context) => {
+        const spy = sinon.spy(WaitForHelper.prototype, 'waitForStableDom');
+        try {
+          await evaluateScript().handler(
+            {
+              params: {function: String(() => 1), waitForStableDom: false},
+            },
+            response,
+            context,
+          );
+          sinon.assert.notCalled(spy);
+
+          await evaluateScript().handler(
+            {
+              params: {function: String(() => 1)},
+            },
+            response,
+            context,
+          );
+          sinon.assert.calledOnce(spy);
+        } finally {
+          spy.restore();
+        }
+      });
+    });
+    it('still awaits a navigation when waitForStableDom is false', async () => {
+      await withMcpContext(async (response, context) => {
+        server.addHtmlRoute('/nav-target', html`<main>navigated</main>`);
+        const url = server.getRoute('/nav-target');
+        await evaluateScript().handler(
+          {
+            params: {
+              function: `() => {
+                location.href = '${url}';
+              }`,
+              waitForStableDom: false,
+            },
+          },
+          response,
+          context,
+        );
+        const result = await response.handle(context);
+        const textContent = getTextContent(result.content[0]);
+        assert.ok(
+          textContent.includes(`Page navigated to ${url}`),
+          `Expected the navigation to be awaited and reported, got: ${textContent}`,
+        );
       });
     });
     it('runs in selected page', async () => {
@@ -78,7 +132,7 @@ describe('script', () => {
 
     it('work for complex objects', async () => {
       await withMcpContext(async (response, context) => {
-        const page = context.getSelectedPptrPage();
+        const page = context.getSelectedMcpPage().pptrPage;
 
         await page.setContent(html`<script src="./scripts.js"></script> `);
 
@@ -106,7 +160,7 @@ describe('script', () => {
 
     it('work for scripts that trigger dialogs', async () => {
       await withMcpContext(async (response, context) => {
-        const page = context.getSelectedPptrPage();
+        const page = context.getSelectedMcpPage().pptrPage;
 
         await page.setContent(html`<button id="test">test</button>`);
 
@@ -129,7 +183,7 @@ describe('script', () => {
 
     it('work for scripts that trigger dialogs and dismiss them', async () => {
       await withMcpContext(async (response, context) => {
-        const page = context.getSelectedPptrPage();
+        const page = context.getSelectedMcpPage().pptrPage;
 
         await page.setContent(html`<button id="test">test</button>`);
 
@@ -152,7 +206,7 @@ describe('script', () => {
 
     it('work for scripts that trigger prompts and fill them', async () => {
       await withMcpContext(async (response, context) => {
-        const page = context.getSelectedPptrPage();
+        const page = context.getSelectedMcpPage().pptrPage;
 
         await page.setContent(html`<button id="test">test</button>`);
 
@@ -175,7 +229,7 @@ describe('script', () => {
 
     it('work for async functions', async () => {
       await withMcpContext(async (response, context) => {
-        const page = context.getSelectedPptrPage();
+        const page = context.getSelectedMcpPage().pptrPage;
 
         await page.setContent(html`<script src="./scripts.js"></script> `);
 
@@ -198,7 +252,7 @@ describe('script', () => {
 
     it('work with one argument', async () => {
       await withMcpContext(async (response, context) => {
-        const page = context.getSelectedPptrPage();
+        const page = context.getSelectedMcpPage().pptrPage;
 
         await page.setContent(html`<button id="test">test</button>`);
 
@@ -225,7 +279,7 @@ describe('script', () => {
 
     it('work with multiple args', async () => {
       await withMcpContext(async (response, context) => {
-        const page = context.getSelectedPptrPage();
+        const page = context.getSelectedMcpPage().pptrPage;
 
         await page.setContent(html`<button id="test">test</button>`);
 
@@ -258,7 +312,7 @@ describe('script', () => {
       server.addHtmlRoute('/main', html`<iframe src="/iframe"></iframe>`);
 
       await withMcpContext(async (response, context) => {
-        const page = context.getSelectedPptrPage();
+        const page = context.getSelectedMcpPage().pptrPage;
         await page.goto(server.getRoute('/main'));
         context.getSelectedMcpPage().textSnapshot = await TextSnapshot.create(
           context.getSelectedMcpPage(),
@@ -278,6 +332,35 @@ describe('script', () => {
         const lineEvaluation = response.responseLines.at(2)!;
         assert.strictEqual(JSON.parse(lineEvaluation), 'I am iframe button');
       });
+    });
+    it('saves output to file when filePath is provided', async () => {
+      const {rm, readFile} = await import('node:fs/promises');
+      const {tmpdir} = await import('node:os');
+      const {join} = await import('node:path');
+      const filePath = join(tmpdir(), 'test-evaluate-script-output.json');
+      try {
+        await withMcpContext(async (response, context) => {
+          await evaluateScript().handler(
+            {
+              params: {
+                function: String(() => ({hello: 'world'})),
+                filePath,
+              },
+            },
+            response,
+            context,
+          );
+          assert.strictEqual(response.responseLines.length, 1);
+          assert.ok(
+            response.responseLines[0]?.includes('Output saved to'),
+            `Expected "Output saved to" but got: ${response.responseLines[0]}`,
+          );
+        });
+        const content = await readFile(filePath, 'utf-8');
+        assert.deepStrictEqual(JSON.parse(content), {hello: 'world'});
+      } finally {
+        await rm(filePath, {force: true});
+      }
     });
     it('evaluates inside extension service worker', async () => {
       await withMcpContext(
@@ -303,6 +386,8 @@ describe('script', () => {
 
           const swId = context.getExtensionServiceWorkerId(sw);
 
+          await context.triggerExtensionAction(extensionId);
+
           response.resetResponseLineForTesting();
           await evaluateScript({
             categoryExtensions: true,
@@ -326,7 +411,7 @@ describe('script', () => {
           assertNoServiceWorkerReported(targets, extensionId);
         },
         {},
-        {categoryExtensions: true} as ParsedArguments,
+        {categoryExtensions: true},
       );
     });
 
@@ -353,7 +438,7 @@ describe('script', () => {
           );
         },
         {},
-        {categoryExtensions: true} as ParsedArguments,
+        {categoryExtensions: true},
       );
     });
 
@@ -381,7 +466,7 @@ describe('script', () => {
           );
         },
         {},
-        {categoryExtensions: true} as ParsedArguments,
+        {categoryExtensions: true},
       );
     });
   });

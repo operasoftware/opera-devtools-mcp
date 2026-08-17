@@ -14,7 +14,7 @@ import {
   ensureBrowserLaunched,
   getCurrentBrowser,
 } from '../browser.js';
-import {logger} from '../logger.js';
+import {logger} from '../utils/logger.js';
 
 type ServerArgs = ReturnType<typeof parseArguments>;
 
@@ -139,7 +139,7 @@ export async function ensureBrowserFlagsForTool(
     return;
   }
 
-  logger(
+  logger?.(
     `Relaunching browser ${needsOperaFlags ? 'with' : 'without'} Opera automation flags for ${toolName}`,
   );
 

@@ -5,19 +5,29 @@
  */
 
 import assert from 'node:assert';
+import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {afterEach, describe, it} from 'node:test';
 import {pathToFileURL} from 'node:url';
 
+import {Locator} from 'puppeteer';
 import sinon from 'sinon';
 
 import {NetworkFormatter} from '../src/formatters/NetworkFormatter.js';
+import {McpContext} from '../src/McpContext.js';
+import {McpPage} from '../src/McpPage.js';
 import {TextSnapshot} from '../src/TextSnapshot.js';
-import type {HTTPResponse} from '../src/third_party/index.js';
-import type {TraceResult} from '../src/trace-processing/parse.js';
+import {type HTTPResponse} from '../src/third_party/index.js';
+import type {TraceResult} from '../src/processors/PerformanceTrace.js';
 
-import {getMockRequest, html, withMcpContext} from './utils.js';
+import {
+  getMockRequest,
+  html,
+  withBrowser,
+  withMcpContext,
+  stabilizeStructuredContent,
+} from './utils.js';
 
 describe('McpContext', () => {
   afterEach(() => {
@@ -55,7 +65,7 @@ describe('McpContext', () => {
     await withMcpContext(async (_response, context) => {
       const page = await context.newPage();
       const timeoutBefore = page.pptrPage.getDefaultTimeout();
-      await context.emulate({cpuThrottlingRate: 2});
+      await context.getSelectedMcpPage().emulate({cpuThrottlingRate: 2});
       const timeoutAfter = page.pptrPage.getDefaultTimeout();
       assert(timeoutBefore < timeoutAfter, 'Timeout was less then expected');
     });
@@ -65,7 +75,9 @@ describe('McpContext', () => {
     await withMcpContext(async (_response, context) => {
       const page = await context.newPage();
       const timeoutBefore = page.pptrPage.getDefaultNavigationTimeout();
-      await context.emulate({networkConditions: 'Slow 3G'});
+      await context
+        .getSelectedMcpPage()
+        .emulate({networkConditions: 'Slow 3G'});
       const timeoutAfter = page.pptrPage.getDefaultNavigationTimeout();
       assert(timeoutBefore < timeoutAfter, 'Timeout was less then expected');
     });
@@ -75,7 +87,7 @@ describe('McpContext', () => {
     await withMcpContext(async (_response, context) => {
       const page = await context.newPage();
 
-      await context.emulate({
+      await context.getSelectedMcpPage().emulate({
         cpuThrottlingRate: 2,
         networkConditions: 'Slow 3G',
       });
@@ -94,7 +106,27 @@ describe('McpContext', () => {
       async (_response, context) => {
         const page = await context.newPage();
         await context.createPagesSnapshot();
-        assert.ok(page.devToolsPage);
+        assert.ok(await page.getDevToolsPage());
+
+        // A devtools page is tracked but excluded from the listing, so its id
+        // must not resolve through `getPageById()` (which backs `select_page`
+        // and every other pageId tool). A second snapshot guarantees the
+        // devtools page is enrolled.
+        await context.createPagesSnapshot();
+        const listed = context.getPages();
+        assert.ok(
+          listed.every(
+            mcpPage => !mcpPage.pptrPage.url().startsWith('devtools://'),
+          ),
+          'listing should exclude devtools pages',
+        );
+        const listedIds = new Set(listed.map(mcpPage => mcpPage.id));
+        for (let id = 1; id < 30; id++) {
+          if (listedIds.has(id)) {
+            continue;
+          }
+          assert.throws(() => context.getPageById(id), /No page found/);
+        }
       },
       {
         autoOpenDevTools: true,
@@ -112,7 +144,7 @@ describe('McpContext', () => {
 
       // Capture a uid from page1's snapshot (snapshotId=1, button is node 1)
       const page1Uid = '1_1';
-      const page1Node = context.getAXNodeByUid(page1Uid);
+      const page1Node = page1.getAXNodeByUid(page1Uid);
       assert.ok(page1Node, 'uid should resolve from page1 snapshot');
 
       // Page 2: new page, set content, snapshot
@@ -124,13 +156,151 @@ describe('McpContext', () => {
       });
 
       // Page 2 is now selected. Page 1's uid should still resolve.
-      const node = context.getAXNodeByUid(page1Uid);
+      const node = page1.getAXNodeByUid(page1Uid);
       assert.ok(node, 'page1 uid should still resolve after page2 snapshot');
       assert.strictEqual(node?.name, 'Page1 Button');
 
       // The element should also be retrievable when the target page is provided.
       const element = await page1.getElementByUid(page1Uid);
       assert.ok(element, 'should get element handle from page1 snapshot uid');
+    });
+  });
+
+  it('reports the fallback when the selected page is closed', async () => {
+    await withMcpContext(async (_response, context) => {
+      const page = await context.newPage();
+      assert.ok(context.isPageSelected(page));
+
+      await page.pptrPage.close();
+      await context.createPagesSnapshot();
+
+      const [firstPage] = context.getPages();
+      assert.ok(firstPage);
+      assert.ok(context.isPageSelected(firstPage));
+
+      const fallback = context.getSelectedPageFallback();
+      assert.ok(fallback, 'fallback should be reported');
+      assert.strictEqual(fallback.wasClosed, true);
+    });
+  });
+
+  it('clears the fallback on the next snapshot with a valid selection', async () => {
+    await withMcpContext(async (_response, context) => {
+      const page = await context.newPage();
+      await page.pptrPage.close();
+      await context.createPagesSnapshot();
+      assert.ok(context.getSelectedPageFallback());
+
+      // A later snapshot keeps a valid selection (e.g. the one taken before the
+      // next response, or after an explicit select), so the note is not repeated.
+      await context.createPagesSnapshot();
+      assert.strictEqual(context.getSelectedPageFallback(), undefined);
+    });
+  });
+
+  it('does not report a fallback for a regular selection', async () => {
+    await withMcpContext(async (_response, context) => {
+      await context.newPage();
+      await context.createPagesSnapshot();
+      assert.strictEqual(context.getSelectedPageFallback(), undefined);
+    });
+  });
+
+  it('keeps a still-open selected page that is missing from the list', async () => {
+    await withMcpContext(async (_response, context) => {
+      const page = await context.newPage();
+      assert.ok(context.isPageSelected(page));
+
+      // A live page that is temporarily missing from the pages list must keep
+      // its selection — only a genuinely closed page is replaced.
+      const pages = await context.browser.pages();
+      const stub = sinon
+        .stub(context.browser, 'pages')
+        .resolves(pages.filter(otherPage => otherPage !== page.pptrPage));
+      try {
+        await context.createPagesSnapshot();
+      } finally {
+        stub.restore();
+      }
+
+      assert.ok(
+        context.isPageSelected(page),
+        'a still-open page should keep its selection',
+      );
+      assert.strictEqual(context.getSelectedPageFallback(), undefined);
+    });
+  });
+
+  it('continues page ids across contexts so stale ids do not resolve', async () => {
+    await withBrowser(async browser => {
+      const options = {
+        experimentalDevToolsDebugging: false,
+        performanceCrux: false,
+      };
+      const first = await McpContext.from(browser, undefined, options, Locator);
+      const idBeforeReconnect = (await first.newPage()).id;
+      first.dispose();
+
+      // A new context (as created after a browser reconnect) continues the
+      // shared id counter, so an id handed out before no longer resolves and
+      // the next page keeps counting up rather than colliding with it.
+      const second = await McpContext.from(
+        browser,
+        undefined,
+        options,
+        Locator,
+      );
+      try {
+        assert.throws(
+          () => second.getPageById(idBeforeReconnect),
+          /No page found/,
+        );
+        assert.ok(
+          (await second.newPage()).id > idBeforeReconnect,
+          'ids continue past the pre-reconnect ids',
+        );
+      } finally {
+        second.dispose();
+      }
+    });
+  });
+
+  it('reports the reconnect notice once', async () => {
+    await withBrowser(async browser => {
+      const context = await McpContext.from(
+        browser,
+        undefined,
+        {
+          experimentalDevToolsDebugging: false,
+          performanceCrux: false,
+          reconnected: true,
+        },
+        Locator,
+      );
+      try {
+        assert.ok(context.consumeReconnectNotice(), 'notice available once');
+        assert.ok(!context.consumeReconnectNotice(), 'notice does not repeat');
+      } finally {
+        context.dispose();
+      }
+    });
+  });
+
+  it('disposes loaded heap snapshots on teardown', async () => {
+    await withMcpContext(async (_response, context) => {
+      const filePath = path.join(
+        process.cwd(),
+        'tests/fixtures/example.heapsnapshot',
+      );
+      await context.getHeapSnapshotStats(filePath);
+      assert.ok(context.hasHeapSnapshots(), 'snapshot loaded before teardown');
+
+      context.dispose();
+
+      assert.ok(
+        !context.hasHeapSnapshots(),
+        'heap snapshots freed on teardown',
+      );
     });
   });
 
@@ -141,13 +311,13 @@ describe('McpContext', () => {
         stableId: 123,
       });
 
-      sinon.stub(context, 'getNetworkRequests').returns([mockRequest]);
-      sinon.stub(context, 'getNetworkRequestStableId').returns(123);
+      sinon
+        .stub(context.getSelectedMcpPage(), 'getNetworkRequests')
+        .returns([mockRequest]);
 
       response.setIncludeNetworkRequests(true);
-      const result = await response.handle('test', context);
-
-      t.assert.snapshot?.(JSON.stringify(result.structuredContent, null, 2));
+      const result = await response.handle(context);
+      t.assert.snapshot(stabilizeStructuredContent(result.structuredContent));
     });
   });
 
@@ -158,13 +328,14 @@ describe('McpContext', () => {
         stableId: 456,
       });
 
-      sinon.stub(context, 'getNetworkRequestById').returns(mockRequest);
-      sinon.stub(context, 'getNetworkRequestStableId').returns(456);
+      sinon
+        .stub(context.getSelectedMcpPage(), 'getNetworkRequestById')
+        .returns(mockRequest);
 
       response.attachNetworkRequest(456);
-      const result = await response.handle('test', context);
+      const result = await response.handle(context);
 
-      t.assert.snapshot?.(JSON.stringify(result.structuredContent, null, 2));
+      t.assert.snapshot(stabilizeStructuredContent(result.structuredContent));
     });
   });
 
@@ -182,20 +353,24 @@ describe('McpContext', () => {
         } as unknown as HTTPResponse,
       });
 
-      sinon.stub(context, 'getNetworkRequestById').returns(mockRequest);
-      sinon.stub(context, 'getNetworkRequestStableId').returns(789);
+      sinon
+        .stub(context.getSelectedMcpPage(), 'getNetworkRequestById')
+        .returns(mockRequest);
+
+      // Use os.tmpdir() so validatePath passes on all platforms (macOS tmpdir
+      // is /var/folders/..., not /tmp, so hardcoded /tmp paths are rejected).
+      const reqFilePath = path.join(os.tmpdir(), 'req.txt');
+      const resFilePath = path.join(os.tmpdir(), 'res.txt');
 
       // We stub NetworkFormatter.from to avoid actual file system writes and verify arguments
       const fromStub = sinon
         .stub(NetworkFormatter, 'from')
         .callsFake(async (_req, opts) => {
-          // Verify we received the file paths
-          assert.strictEqual(opts?.requestFilePath, '/tmp/req.txt');
-          assert.strictEqual(opts?.responseFilePath, '/tmp/res.txt');
-          // Return a dummy formatter that behaves as if it saved files
-          // We need to create a real instance or mock one.
-          // Since constructor is private, we can't easily new it up.
-          // But we can return a mock object.
+          // Verify we received the platform-correct file paths
+          assert.strictEqual(opts?.requestFilePath, reqFilePath);
+          assert.strictEqual(opts?.responseFilePath, resFilePath);
+          // Return fixed strings in toJSONDetailed so the snapshot is stable
+          // across platforms (os.tmpdir() differs on macOS vs Linux/Windows).
           return {
             toStringDetailed: () => 'Detailed string',
             toJSONDetailed: () => ({
@@ -206,12 +381,12 @@ describe('McpContext', () => {
         });
 
       response.attachNetworkRequest(789, {
-        requestFilePath: '/tmp/req.txt',
-        responseFilePath: '/tmp/res.txt',
+        requestFilePath: reqFilePath,
+        responseFilePath: resFilePath,
       });
-      const result = await response.handle('test', context);
+      const result = await response.handle(context);
 
-      t.assert.snapshot?.(JSON.stringify(result.structuredContent, null, 2));
+      t.assert.snapshot(stabilizeStructuredContent(result.structuredContent));
 
       fromStub.restore();
     });
@@ -236,24 +411,64 @@ describe('McpContext', () => {
   it('validatePath allows paths within roots', async () => {
     await withMcpContext(async (_response, context) => {
       const workspacePath = path.resolve(os.homedir(), 'workspace-test');
-      const roots = [
-        {uri: pathToFileURL(workspacePath).href, name: 'workspace'},
-      ];
-      context.setRoots(roots);
-      // Valid path within root
-      context.validatePath(path.join(workspacePath, 'test.txt'));
-      context.validatePath(workspacePath);
+      await fs.mkdir(workspacePath, {recursive: true});
+      try {
+        const roots = [
+          {uri: pathToFileURL(workspacePath).href, name: 'workspace'},
+        ];
+        context.setRoots(roots);
+        // Valid path within root
+        await context.validatePath(path.join(workspacePath, 'test.txt'));
+        await context.validatePath(workspacePath);
 
-      // Invalid path outside root and outside temp dir
-      const outsidePath = path.resolve(os.homedir(), 'outside-test.txt');
-      assert.throws(() => context.validatePath(outsidePath), /Access denied/);
+        // Invalid path outside root and outside temp dir
+        const outsidePath = path.resolve(os.homedir(), 'outside-test.txt');
+        await assert.rejects(
+          context.validatePath(outsidePath),
+          /Access denied/,
+        );
+      } finally {
+        await fs.rm(workspacePath, {recursive: true, force: true});
+      }
     });
   });
 
-  it('validatePath allows all paths if roots are undefined (legacy)', async () => {
+  it('validatePath allows non-existent nested paths within roots', async () => {
     await withMcpContext(async (_response, context) => {
-      context.setRoots(undefined);
-      context.validatePath(path.resolve(os.homedir(), 'anywhere.txt'));
+      const workspacePath = path.resolve(os.homedir(), 'workspace-test-nested');
+      await fs.mkdir(workspacePath, {recursive: true});
+      try {
+        const roots = [
+          {uri: pathToFileURL(workspacePath).href, name: 'workspace'},
+        ];
+        context.setRoots(roots);
+        // Valid path within root with non-existent intermediate directories
+        await context.validatePath(
+          path.join(workspacePath, 'dir1', 'dir2', 'test.txt'),
+        );
+      } finally {
+        await fs.rm(workspacePath, {recursive: true, force: true});
+      }
+    });
+  });
+
+  it('validatePath allows all paths if roots are undefined and allowUnrestrictedPaths is set', async () => {
+    await withMcpContext(
+      async (_response, context) => {
+        context.setRoots(undefined);
+        await context.validatePath(path.resolve(os.homedir(), 'anywhere.txt'));
+      },
+      {allowUnrestrictedPaths: true},
+    );
+  });
+
+  it('validatePath denies paths outside tmpdir if roots are undefined and allowUnrestrictedPaths is not set', async () => {
+    await withMcpContext(async (_response, context) => {
+      // setRoots() never called — simulates a client that skips roots capability.
+      const outsidePath = path.resolve(os.homedir(), 'anywhere.txt');
+      await assert.rejects(context.validatePath(outsidePath), /Access denied/);
+      // Temp dir must still be reachable.
+      await context.validatePath(path.join(os.tmpdir(), 'test.txt'));
     });
   });
 
@@ -261,13 +476,247 @@ describe('McpContext', () => {
     await withMcpContext(async (_response, context) => {
       context.setRoots([]);
       // Should allow temp dir
-      context.validatePath(path.join(os.tmpdir(), 'test.txt'));
+      await context.validatePath(path.join(os.tmpdir(), 'test.txt'));
 
       // Should deny outside temp dir
-      assert.throws(
-        () => context.validatePath(path.resolve(os.homedir(), 'anywhere.txt')),
+      await assert.rejects(
+        context.validatePath(path.resolve(os.homedir(), 'anywhere.txt')),
         /Access denied/,
       );
+    });
+  });
+
+  describe('symlink security checks', () => {
+    // Symlinks are not followed on Windows by default.
+    if (os.platform() === 'win32') {
+      return;
+    }
+
+    it('saveFile refuses to write through a symlink to an existing file', async () => {
+      await withMcpContext(async (_response, context) => {
+        const tmpDir = await fs.mkdtemp(
+          path.join(os.tmpdir(), 'mcp-symlink-test-'),
+        );
+        try {
+          context.setRoots([{uri: pathToFileURL(tmpDir).href, name: 'temp'}]);
+
+          const targetPath = path.join(tmpDir, 'target.txt');
+          await fs.writeFile(targetPath, 'original content', 'utf-8');
+
+          const symlinkPath = path.join(tmpDir, 'symlink.txt');
+          await fs.symlink(targetPath, symlinkPath);
+
+          const data = new TextEncoder().encode('malicious content');
+          await assert.rejects(
+            context.saveFile(data, symlinkPath, '.txt'),
+            /Could not write/,
+          );
+
+          const content = await fs.readFile(targetPath, 'utf-8');
+          assert.strictEqual(content, 'original content');
+        } finally {
+          await fs.rm(tmpDir, {recursive: true, force: true});
+        }
+      });
+    });
+
+    it('saveFile refuses to write through a dangling symlink to a non-existent file', async () => {
+      await withMcpContext(async (_response, context) => {
+        const tmpDir = await fs.mkdtemp(
+          path.join(os.tmpdir(), 'mcp-symlink-test-'),
+        );
+        const outsideDir = await fs.mkdtemp(
+          path.join(os.tmpdir(), 'mcp-outside-test-'),
+        );
+        try {
+          context.setRoots([{uri: pathToFileURL(tmpDir).href, name: 'temp'}]);
+
+          const outsideTarget = path.join(outsideDir, 'target.txt');
+          const symlinkPath = path.join(tmpDir, 'symlink.txt');
+          await fs.symlink(outsideTarget, symlinkPath);
+
+          const data = new TextEncoder().encode('malicious content');
+          await assert.rejects(
+            context.saveFile(data, symlinkPath, '.txt'),
+            /Could not write/,
+          );
+
+          await assert.rejects(fs.stat(outsideTarget));
+        } finally {
+          await fs.rm(tmpDir, {recursive: true, force: true});
+          await fs.rm(outsideDir, {recursive: true, force: true});
+        }
+      });
+    });
+
+    it('saveFile allows writing to a file within an allowed symlinked directory', async () => {
+      await withMcpContext(async (_response, context) => {
+        const tmpDir = await fs.mkdtemp(
+          path.join(os.tmpdir(), 'mcp-symlink-test-'),
+        );
+        try {
+          context.setRoots([{uri: pathToFileURL(tmpDir).href, name: 'temp'}]);
+
+          const realDir = path.join(tmpDir, 'real_dir');
+          await fs.mkdir(realDir, {recursive: true});
+
+          const symlinkedDir = path.join(tmpDir, 'symlinked_dir');
+          await fs.symlink(realDir, symlinkedDir);
+
+          const targetFilePath = path.join(symlinkedDir, 'test.txt');
+          const data = new TextEncoder().encode('allowed content');
+
+          const result = await context.saveFile(data, targetFilePath, '.txt');
+          assert.strictEqual(result.filename, targetFilePath);
+
+          const content = await fs.readFile(
+            path.join(realDir, 'test.txt'),
+            'utf-8',
+          );
+          assert.strictEqual(content, 'allowed content');
+        } finally {
+          await fs.rm(tmpDir, {recursive: true, force: true});
+        }
+      });
+    });
+  });
+
+  describe('loadResource', () => {
+    describe('file protocol', () => {
+      it('calls validatePath', async () => {
+        await withMcpContext(async (_response, context) => {
+          const validatePathSpy = sinon.spy(context, 'validatePath');
+          const testFilePath = path.join(os.tmpdir(), 'load-resource-test.txt');
+          await fs.writeFile(testFilePath, 'test content');
+          try {
+            const url = pathToFileURL(testFilePath).href;
+            const content = await context.loadResource(url);
+            assert.strictEqual(content, 'test content');
+            sinon.assert.calledWith(validatePathSpy, testFilePath);
+          } finally {
+            await fs.rm(testFilePath, {force: true});
+          }
+        });
+      });
+
+      it('is not blocked by allowlist', async () => {
+        const testFilePath = path.join(
+          os.tmpdir(),
+          'load-resource-test-allow.txt',
+        );
+        await fs.writeFile(testFilePath, 'test content');
+        try {
+          await withMcpContext(
+            async (_response, context) => {
+              const url = pathToFileURL(testFilePath).href;
+              const content = await context.loadResource(url);
+              assert.strictEqual(content, 'test content');
+            },
+            {
+              allowedUrlPattern: ['https://example.com/allowed*'],
+            },
+          );
+        } finally {
+          await fs.rm(testFilePath, {force: true});
+        }
+      });
+    });
+
+    describe('https protocol', () => {
+      it('respects blocklist by throwing if blocked', async () => {
+        await withMcpContext(
+          async (_response, context) => {
+            await assert.rejects(() =>
+              context.loadResource('https://example.com/blocked'),
+            );
+          },
+          {
+            blockedUrlPattern: ['https://example.com/blocked*'],
+          },
+        );
+      });
+
+      it('respects blocklist by not throwing if not blocked', async () => {
+        await withMcpContext(
+          async (_response, context) => {
+            sinon.stub(globalThis, 'fetch').resolves({
+              ok: true,
+              text: async () => 'mock data',
+            } as Response);
+
+            const content = await context.loadResource(
+              'https://example.com/allowed',
+            );
+            assert.strictEqual(content, 'mock data');
+          },
+          {
+            blockedUrlPattern: ['https://example.com/blocked*'],
+          },
+        );
+      });
+
+      it('respects allowlist by throwing if not allowed', async () => {
+        await withMcpContext(
+          async (_response, context) => {
+            await assert.rejects(() =>
+              context.loadResource('https://example.com/blocked'),
+            );
+          },
+          {
+            allowedUrlPattern: ['https://example.com/allowed*'],
+          },
+        );
+      });
+
+      it('respects allowlist by not throwing if allowed', async () => {
+        await withMcpContext(
+          async (_response, context) => {
+            sinon.stub(globalThis, 'fetch').resolves({
+              ok: true,
+              text: async () => 'mock data',
+            } as Response);
+
+            const content = await context.loadResource(
+              'https://example.com/allowed',
+            );
+            assert.strictEqual(content, 'mock data');
+          },
+          {
+            allowedUrlPattern: ['https://example.com/allowed*'],
+          },
+        );
+      });
+    });
+
+    describe('getDevToolsData', () => {
+      it('returns devtools data from passed page', async () => {
+        await withMcpContext(async (_response, context) => {
+          const mockPage = sinon.createStubInstance(McpPage);
+          mockPage.getDevToolsData.resolves({cdpBackendNodeId: 42});
+          const result = await context.getDevToolsData(mockPage);
+          assert.deepStrictEqual(result, {cdpBackendNodeId: 42});
+        });
+      });
+
+      it('returns undefined when getDevToolsData times out', async () => {
+        await withMcpContext(async (_response, context) => {
+          const mockPage = sinon.createStubInstance(McpPage);
+          mockPage.getDevToolsData.returns(
+            new Promise(resolve => {
+              setTimeout(() => resolve({cdpBackendNodeId: 100}), 600);
+            }),
+          );
+          const result = await context.getDevToolsData(mockPage);
+          assert.strictEqual(result, undefined);
+        });
+      });
+
+      it('returns empty object from selected page when devtools is closed', async () => {
+        await withMcpContext(async (_response, context) => {
+          const result = await context.getDevToolsData();
+          assert.deepStrictEqual(result, {});
+        });
+      });
     });
   });
 });

@@ -85,6 +85,10 @@
       {
         "name": "viewport_length",
         "argType": "number"
+      },
+      {
+        "name": "extra_http_headers_length",
+        "argType": "number"
       }
     ]
   },
@@ -111,6 +115,14 @@
       {
         "name": "dialog_action_length",
         "argType": "number"
+      },
+      {
+        "name": "file_path_length",
+        "argType": "number"
+      },
+      {
+        "name": "wait_for_stable_dom",
+        "argType": "boolean"
       }
     ]
   },
@@ -246,6 +258,14 @@
       {
         "name": "include_preserved_messages",
         "argType": "boolean"
+      },
+      {
+        "name": "include_stack_traces",
+        "argType": "boolean"
+      },
+      {
+        "name": "service_worker_id_length",
+        "argType": "number"
       }
     ]
   },
@@ -458,7 +478,8 @@
         "name": "file_path_length",
         "argType": "number"
       }
-    ]
+    ],
+    "isDeprecated": true
   },
   {
     "name": "take_screenshot",
@@ -530,11 +551,16 @@
     "args": [
       {
         "name": "file_path_length",
-        "argType": "number"
+        "argType": "number",
+        "isDeprecated": true
       },
       {
         "name": "include_snapshot",
         "argType": "boolean"
+      },
+      {
+        "name": "file_paths_count",
+        "argType": "number"
       }
     ]
   },
@@ -575,7 +601,8 @@
         "name": "file_path_length",
         "argType": "number"
       }
-    ]
+    ],
+    "isDeprecated": true
   },
   {
     "name": "get_memory_snapshot_details",
@@ -592,7 +619,8 @@
         "name": "page_size",
         "argType": "number"
       }
-    ]
+    ],
+    "isDeprecated": true
   },
   {
     "name": "get_nodes_by_class",
@@ -609,7 +637,8 @@
         "name": "page_size",
         "argType": "number"
       }
-    ]
+    ],
+    "isDeprecated": true
   },
   {
     "name": "execute_3p_developer_tool",
@@ -622,11 +651,13 @@
         "name": "params_length",
         "argType": "number"
       }
-    ]
+    ],
+    "isDeprecated": true
   },
   {
     "name": "list_3p_developer_tools",
-    "args": []
+    "args": [],
+    "isDeprecated": true
   },
   {
     "name": "opera_chat",
@@ -675,5 +706,290 @@
   {
     "name": "opera_list_models",
     "args": []
+  },
+  {
+    "name": "close_heapsnapshot",
+    "args": [
+      {
+        "name": "file_path_length",
+        "argType": "number"
+      }
+    ]
+  },
+  {
+    "name": "compare_heapsnapshots",
+    "args": [
+      {
+        "name": "base_file_path_length",
+        "argType": "number"
+      },
+      {
+        "name": "current_file_path_length",
+        "argType": "number"
+      },
+      {
+        "name": "class_index",
+        "argType": "number"
+      }
+    ]
+  },
+  {
+    "name": "execute3p_developer_tool",
+    "args": [
+      {
+        "name": "tool_name_length",
+        "argType": "number"
+      },
+      {
+        "name": "params_length",
+        "argType": "number"
+      }
+    ]
+  },
+  {
+    "name": "get_heapsnapshot_class_nodes",
+    "args": [
+      {
+        "name": "file_path_length",
+        "argType": "number"
+      },
+      {
+        "name": "id",
+        "argType": "number"
+      },
+      {
+        "name": "filter_name",
+        "argType": "string"
+      },
+      {
+        "name": "object_id",
+        "argType": "number"
+      },
+      {
+        "name": "page_idx",
+        "argType": "number"
+      },
+      {
+        "name": "page_size",
+        "argType": "number"
+      }
+    ]
+  },
+  {
+    "name": "get_heapsnapshot_details",
+    "args": [
+      {
+        "name": "file_path_length",
+        "argType": "number"
+      },
+      {
+        "name": "filter_name",
+        "argType": "string"
+      },
+      {
+        "name": "object_id",
+        "argType": "number"
+      },
+      {
+        "name": "page_idx",
+        "argType": "number"
+      },
+      {
+        "name": "page_size",
+        "argType": "number"
+      }
+    ]
+  },
+  {
+    "name": "get_heapsnapshot_dominators",
+    "args": [
+      {
+        "name": "file_path_length",
+        "argType": "number"
+      },
+      {
+        "name": "node_id",
+        "argType": "number"
+      }
+    ]
+  },
+  {
+    "name": "get_heapsnapshot_duplicate_strings",
+    "args": [
+      {
+        "name": "file_path_length",
+        "argType": "number"
+      },
+      {
+        "name": "page_idx",
+        "argType": "number"
+      },
+      {
+        "name": "page_size",
+        "argType": "number"
+      }
+    ]
+  },
+  {
+    "name": "get_heapsnapshot_edges",
+    "args": [
+      {
+        "name": "file_path_length",
+        "argType": "number"
+      },
+      {
+        "name": "node_id",
+        "argType": "number"
+      },
+      {
+        "name": "sort_by",
+        "argType": "string"
+      },
+      {
+        "name": "min_retained_size",
+        "argType": "number"
+      },
+      {
+        "name": "exclude_primitives",
+        "argType": "boolean"
+      },
+      {
+        "name": "page_idx",
+        "argType": "number"
+      },
+      {
+        "name": "page_size",
+        "argType": "number"
+      }
+    ]
+  },
+  {
+    "name": "get_heapsnapshot_object_details",
+    "args": [
+      {
+        "name": "file_path_length",
+        "argType": "number"
+      },
+      {
+        "name": "node_id",
+        "argType": "number"
+      }
+    ]
+  },
+  {
+    "name": "get_heapsnapshot_retainers",
+    "args": [
+      {
+        "name": "file_path_length",
+        "argType": "number"
+      },
+      {
+        "name": "node_id",
+        "argType": "number"
+      },
+      {
+        "name": "page_idx",
+        "argType": "number"
+      },
+      {
+        "name": "page_size",
+        "argType": "number"
+      }
+    ]
+  },
+  {
+    "name": "get_heapsnapshot_retaining_paths",
+    "args": [
+      {
+        "name": "file_path_length",
+        "argType": "number"
+      },
+      {
+        "name": "node_id",
+        "argType": "number"
+      },
+      {
+        "name": "max_depth",
+        "argType": "number"
+      },
+      {
+        "name": "max_nodes",
+        "argType": "number"
+      },
+      {
+        "name": "max_siblings",
+        "argType": "number"
+      }
+    ]
+  },
+  {
+    "name": "get_heapsnapshot_summary",
+    "args": [
+      {
+        "name": "file_path_length",
+        "argType": "number"
+      }
+    ]
+  },
+  {
+    "name": "get_os_app_state",
+    "args": [
+      {
+        "name": "manifest_id_length",
+        "argType": "number"
+      }
+    ]
+  },
+  {
+    "name": "install_pwa",
+    "args": [
+      {
+        "name": "manifest_id_length",
+        "argType": "number"
+      },
+      {
+        "name": "install_url_or_bundle_url_length",
+        "argType": "number"
+      },
+      {
+        "name": "display_mode",
+        "argType": "string"
+      }
+    ]
+  },
+  {
+    "name": "launch_pwa",
+    "args": [
+      {
+        "name": "manifest_id_length",
+        "argType": "number"
+      },
+      {
+        "name": "url_length",
+        "argType": "number"
+      }
+    ]
+  },
+  {
+    "name": "list3p_developer_tools",
+    "args": []
+  },
+  {
+    "name": "take_heapsnapshot",
+    "args": [
+      {
+        "name": "file_path_length",
+        "argType": "number"
+      }
+    ]
+  },
+  {
+    "name": "uninstall_pwa",
+    "args": [
+      {
+        "name": "manifest_id_length",
+        "argType": "number"
+      }
+    ]
   }
 ]

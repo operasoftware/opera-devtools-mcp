@@ -9,10 +9,10 @@
  */
 
 import type {parseArguments} from './bin/chrome-devtools-mcp-cli-options.js';
-import {logger} from './logger.js';
 import type {McpContext} from './McpContext.js';
+import type {McpPage} from './McpPage.js';
+import type {DataFormat} from './McpResponse.js';
 import {McpResponse} from './McpResponse.js';
-import type {Mutex} from './Mutex.js';
 import {CLI_BIN_NAME} from './opera/branding.js';
 import type {
   OperaToolHooks,
@@ -20,12 +20,22 @@ import type {
 } from './opera/toolHandlerHooks.js';
 import {SlimMcpResponse} from './SlimMcpResponse.js';
 import {ClearcutLogger} from './telemetry/ClearcutLogger.js';
-import {bucketizeLatency} from './telemetry/metricUtils.js';
-import type {CallToolResult, zod} from './third_party/index.js';
+import {bucketizeLatency, buildContext} from './telemetry/transformation.js';
+import type {CallToolResult} from './third_party/index.js';
+import {zod} from './third_party/index.js';
 import type {ToolCategory} from './tools/categories.js';
 import {labels, OFF_BY_DEFAULT_CATEGORIES} from './tools/categories.js';
-import type {DefinedPageTool, ToolDefinition} from './tools/ToolDefinition.js';
+import type {
+  DefinedPageTool,
+  DevToolsData,
+  FileVerificationOption,
+  ToolDefinition,
+} from './tools/ToolDefinition.js';
 import {pageIdSchema} from './tools/ToolDefinition.js';
+import {logger} from './utils/logger.js';
+import type {Mutex} from './third_party/index.js';
+import {fileURLToPath} from 'node:url';
+import {isLocalhost} from './utils/url.js';
 
 export function buildFlag(category: ToolCategory) {
   return `category${category.charAt(0).toUpperCase() + category.slice(1)}`;
@@ -130,8 +140,94 @@ function isPageScopedTool(
   return 'pageScoped' in tool && tool.pageScoped === true;
 }
 
+function formatArgumentNames(names: string[]): string {
+  return names.map(name => `"${name}"`).join(', ');
+}
+
+function buildUnknownArgumentsMessage(
+  toolName: string,
+  unknownArgumentNames: string[],
+  expectedArgumentNames: string[],
+): string {
+  const unknownLabel =
+    unknownArgumentNames.length === 1 ? 'argument' : 'arguments';
+  const expectedArguments = expectedArgumentNames.length
+    ? `Expected arguments: ${formatArgumentNames(expectedArgumentNames)}.`
+    : 'This tool does not accept any arguments.';
+  const correction =
+    unknownArgumentNames.length === 1 ? 'Remove it' : 'Remove them';
+
+  return `Unknown ${unknownLabel} for tool "${toolName}": ${formatArgumentNames(unknownArgumentNames)}. ${expectedArguments} ${correction} and retry.`;
+}
+
+function extractPaths(value: unknown): string[] {
+  if (typeof value === 'string') {
+    return [value];
+  }
+  if (Array.isArray(value)) {
+    return value.filter(item => typeof item === 'string');
+  }
+  return [];
+}
+
+function isLocalBrowser(context: McpContext): boolean {
+  if (context.browser.process()) {
+    return true;
+  }
+  const wsEndpoint = context.browser.wsEndpoint();
+  if (wsEndpoint && isLocalhost(wsEndpoint)) {
+    return true;
+  }
+  return false;
+}
+
+function shouldValidateFile(
+  option: FileVerificationOption | undefined,
+  isLocal: boolean,
+): boolean {
+  if (option === true) {
+    return true;
+  }
+  if (typeof option === 'object' && option !== null) {
+    if (isLocal) {
+      return Boolean(option.local);
+    }
+    return Boolean(option.remote);
+  }
+  return false;
+}
+
+async function validateToolFiles(
+  tool: ToolDefinition | DefinedPageTool,
+  params: Record<string, unknown>,
+  context: McpContext,
+): Promise<void> {
+  const isLocal = isLocalBrowser(context);
+  const pathsOrUrlsToValidate: string[] = [];
+  for (const [key, option] of Object.entries(tool.verifyFilesSchema)) {
+    if (shouldValidateFile(option, isLocal)) {
+      pathsOrUrlsToValidate.push(...extractPaths(params[key]));
+    }
+  }
+  for (const filePathOrUrl of pathsOrUrlsToValidate) {
+    let filePath = filePathOrUrl;
+    try {
+      const url = new URL(filePathOrUrl);
+      if (url.protocol === 'file:') {
+        filePath = fileURLToPath(url);
+      } else if (['http:', 'https:', 'ws:', 'wss:'].includes(url.protocol)) {
+        continue;
+      }
+    } catch {
+      // Suppress parsing errors for regular file paths.
+    }
+    await context.validatePath(filePath);
+  }
+}
+
 export class ToolHandler {
   readonly inputSchema: zod.ZodRawShape;
+  readonly registeredInputSchema: zod.ZodTypeAny;
   readonly shouldRegister: boolean;
   private readonly disabledReason?: string;
 
@@ -151,8 +247,15 @@ export class ToolHandler {
       tool.pageScoped &&
       serverArgs.experimentalPageIdRouting &&
       !serverArgs.slim
-        ? {...tool.schema, ...pageIdSchema}
+        ? {...pageIdSchema, ...tool.schema}
         : tool.schema;
+    this.registeredInputSchema = zod.object(this.inputSchema).passthrough();
+  }
+
+  unknownArgumentNames(params: Record<string, unknown>): string[] {
+    return Object.keys(params).filter(
+      key => !Object.hasOwn(this.inputSchema, key),
+    );
   }
 
   async handle(
@@ -171,30 +274,54 @@ export class ToolHandler {
       };
     }
 
+    const unknownArgumentNames = this.unknownArgumentNames(params);
+    if (unknownArgumentNames.length) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: buildUnknownArgumentsMessage(
+              this.tool.name,
+              unknownArgumentNames,
+              Object.keys(this.inputSchema),
+            ),
+          },
+        ],
+        isError: true,
+      };
+    }
+
     const guard = this.hooks?.bypassMutex(this.tool)
       ? undefined
       : await this.toolMutex.acquire();
     const startTime = Date.now();
     let success = false;
+    let devToolsData: DevToolsData | undefined;
+    let pageUrl: string | undefined;
     try {
-      logger(
+      logger?.(
         `${this.tool.name} request: ${JSON.stringify(params, null, '  ')}`,
       );
       await this.hooks?.beforeInvoke(this.tool);
       const context = await this.getContext();
-      logger(`${this.tool.name} context: resolved`);
-      await context.detectOpenDevToolsWindows();
+      logger?.(`${this.tool.name} context: resolved`);
       const logCallback = this.hooks?.makeLogCallback(extra);
+
       const response = this.serverArgs.slim
         ? new SlimMcpResponse(this.serverArgs, logCallback)
         : new McpResponse(this.serverArgs, logCallback);
 
       response.setRedactNetworkHeaders(this.serverArgs.redactNetworkHeaders);
+      if (context.consumeReconnectNotice()) {
+        response.setReconnectNotice();
+      }
+      let page: McpPage | undefined;
       try {
+        await validateToolFiles(this.tool, params, context);
         if (isPageScopedTool(this.tool)) {
           const pageId =
             typeof params.pageId === 'number' ? params.pageId : undefined;
-          const page =
+          page =
             this.serverArgs.experimentalPageIdRouting &&
             pageId !== undefined &&
             !this.serverArgs.slim
@@ -226,9 +353,22 @@ export class ToolHandler {
       } catch (err) {
         response.setError(err);
       }
+      devToolsData = await context.getDevToolsData(page);
+      const targetPage = page ?? context.getSelectedMcpPage();
+      if (targetPage?.pptrPage?.isClosed() === false) {
+        pageUrl = targetPage.pptrPage.url();
+      }
+      // Resolve data format: --experimentalDataFormat takes precedence, fall back to legacy --experimentalToonFormat
+      let dataFormat: DataFormat = 'default';
+      if (this.serverArgs.experimentalDataFormat) {
+        dataFormat = this.serverArgs.experimentalDataFormat as DataFormat;
+      } else if (this.serverArgs.experimentalToonFormat) {
+        dataFormat = 'toon';
+      }
+
       const {content, structuredContent} = await response.handle(
-        this.tool.name,
         context,
+        dataFormat,
       );
       const result: CallToolResult & {
         structuredContent?: Record<string, unknown>;
@@ -244,7 +384,7 @@ export class ToolHandler {
       }
       return result;
     } catch (err) {
-      logger(`${this.tool.name} error:`, err, err?.stack);
+      logger?.(`${this.tool.name} error:`, err, err?.stack);
       let errorText = err && 'message' in err ? err.message : String(err);
       if ('cause' in err && err.cause) {
         errorText += `\nCause: ${err.cause.message}`;
@@ -259,14 +399,16 @@ export class ToolHandler {
         isError: true,
       };
     } finally {
+      const context = buildContext(devToolsData, pageUrl);
       void ClearcutLogger.get()?.logToolInvocation({
         toolName: this.tool.name,
         params,
         schema: this.inputSchema,
         success,
         latencyMs: bucketizeLatency(Date.now() - startTime),
+        context,
       });
-      guard?.dispose();
+      guard?.[Symbol.dispose]();
     }
   }
 }

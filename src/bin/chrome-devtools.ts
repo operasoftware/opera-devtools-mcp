@@ -17,8 +17,14 @@ import {
   stopDaemon,
   sendCommand,
   handleResponse,
+  verifyDaemonVersion,
 } from '../daemon/client.js';
-import {isDaemonRunning, serializeArgs} from '../daemon/utils.js';
+import type {DaemonStatusResult} from '../daemon/types.js';
+import {
+  isDaemonRunning,
+  serializeArgs,
+  assertValidSessionId,
+} from '../daemon/utils.js';
 import {logDisclaimers} from '../index.js';
 import {CLI_BIN_NAME, MCP_BIN_NAME, PACKAGE_NAME} from '../opera/branding.js';
 import {hideBin, yargs, type CallToolResult} from '../third_party/index.js';
@@ -65,6 +71,7 @@ startCliOptions.isolated!.description =
 startCliOptions.categoryExtensions!.default = true;
 
 const y = yargs(hideBin(process.argv))
+  .locale('en') // Force English to ensure error string matching works in .fail, all custom messages we output are in English anyways
   .scriptName(CLI_BIN_NAME)
   .showHelpOnFail(true)
   .usage(`${CLI_BIN_NAME} <command> [...args] --flags`)
@@ -76,12 +83,52 @@ const y = yargs(hideBin(process.argv))
     description: 'Session ID for daemon scoping',
     default: '',
     hidden: true,
+    coerce: (sessionId: string) => {
+      assertValidSessionId(sessionId);
+      return sessionId;
+    },
   })
   .demandCommand()
   .version(VERSION)
   .strict()
   .help(true)
-  .wrap(120);
+  .wrap(120)
+  .fail((msg, err) => {
+    if (msg) {
+      console.error('Error:', msg);
+      if (
+        msg.includes('Not enough non-option arguments') ||
+        msg.includes('Unknown argument') ||
+        msg.includes('Unknown arguments')
+      ) {
+        console.error('\n=========================================');
+        console.error('💡 TIP FOR AI AGENT / DEVELOPER:');
+        console.error('In the `chrome-devtools` CLI:');
+        console.error(
+          '1. Required parameters MUST be passed as positional arguments (without flags).',
+        );
+        console.error(
+          '   - INCORRECT: chrome-devtools evaluate_script --expression "() => document.title"',
+        );
+        console.error(
+          '   - CORRECT:   chrome-devtools evaluate_script "() => document.title"',
+        );
+        console.error(
+          '2. Optional parameters are passed as double-dash options/flags (e.g. --pageId 1).',
+        );
+        console.error(
+          '3. Make sure to escape quotes properly for your shell environment.',
+        );
+        console.error(
+          'Run `chrome-devtools <command> --help` to see exact positional and optional parameters.',
+        );
+        console.error('=========================================');
+      }
+    } else if (err) {
+      console.error(err);
+    }
+    process.exit(1);
+  });
 
 y.command(
   'start',
@@ -125,17 +172,16 @@ y.command(
         argv.sessionId,
       );
       if (response.success) {
-        const data = JSON.parse(response.result) as {
-          pid: number | null;
-          socketPath: string;
-          startDate: string;
-          version: string;
-          args: string[];
-        };
+        const data: DaemonStatusResult = JSON.parse(response.result);
         console.log(
           `pid=${data.pid} socket=${data.socketPath} start-date=${data.startDate} version=${data.version}`,
         );
         console.log(`args=${JSON.stringify(data.args)}`);
+        if (data.version !== VERSION) {
+          console.warn(
+            `Warning: Daemon server version (${data.version}) does not match CLI version (${VERSION}). Run 'chrome-devtools start' to update and restart the daemon.`,
+          );
+        }
       } else {
         console.error('Error:', response.error);
         process.exit(1);
@@ -228,8 +274,12 @@ for (const [commandName, commandDef] of Object.entries(commands)) {
     async argv => {
       const sessionId = argv.sessionId as string;
       try {
+        const versionWarningPromise = isDaemonRunning(sessionId)
+          ? verifyDaemonVersion(sessionId, VERSION)
+          : Promise.resolve(undefined);
+
         if (!isDaemonRunning(sessionId)) {
-          await start([], sessionId);
+          await start(serializeArgs(cliOptions, argv), sessionId);
         }
 
         const commandArgs: Record<string, unknown> = {};
@@ -257,6 +307,14 @@ for (const [commandName, commandDef] of Object.entries(commands)) {
           );
         } else {
           console.error('Error:', response.error);
+        }
+
+        const versionWarning = await versionWarningPromise;
+        if (versionWarning) {
+          console.warn(versionWarning);
+        }
+
+        if (!response.success) {
           process.exit(1);
         }
       } catch (error) {

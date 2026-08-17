@@ -5,6 +5,9 @@
  */
 
 import assert from 'node:assert';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import {describe, it, afterEach} from 'node:test';
 
 import sinon from 'sinon';
@@ -28,14 +31,14 @@ describe('screencast', () => {
     it('starts a screencast recording with filePath', async () => {
       await withMcpContext(async (response, context) => {
         const mockRecorder = createMockRecorder();
-        const selectedPage = context.getSelectedPptrPage();
+        const selectedPage = context.getSelectedMcpPage().pptrPage;
         const screencastStub = sinon
           .stub(selectedPage, 'screencast')
           .resolves(mockRecorder as never);
 
         await startScreencast().handler(
           {
-            params: {filePath: '/tmp/test-recording.mp4'},
+            params: {filePath: path.join(os.tmpdir(), 'test-recording.mp4')},
             page: context.getSelectedMcpPage(),
           },
           response,
@@ -56,10 +59,57 @@ describe('screencast', () => {
       });
     });
 
+    it('records WebM for an uppercase extension (case-insensitive)', async () => {
+      await withMcpContext(async (response, context) => {
+        const mockRecorder = createMockRecorder();
+        const selectedPage = context.getSelectedMcpPage().pptrPage;
+        const screencastStub = sinon
+          .stub(selectedPage, 'screencast')
+          .resolves(mockRecorder as never);
+
+        await startScreencast().handler(
+          {
+            params: {filePath: path.join(os.tmpdir(), 'test-recording.WEBM')},
+            page: context.getSelectedMcpPage(),
+          },
+          response,
+          context,
+        );
+
+        sinon.assert.calledOnce(screencastStub);
+        const callArgs = screencastStub.firstCall.args[0];
+        assert.ok(callArgs);
+        assert.strictEqual(callArgs.format, 'webm');
+        assert.ok(callArgs.path?.endsWith('.webm'));
+      });
+    });
+
+    it('rejects an unsupported extension instead of silently using mp4', async () => {
+      await withMcpContext(async (response, context) => {
+        const selectedPage = context.getSelectedMcpPage().pptrPage;
+        const screencastStub = sinon.stub(selectedPage, 'screencast');
+
+        await assert.rejects(
+          startScreencast().handler(
+            {
+              params: {filePath: path.join(os.tmpdir(), 'recording.avi')},
+              page: context.getSelectedMcpPage(),
+            },
+            response,
+            context,
+          ),
+          /Unsupported screencast file extension/,
+        );
+
+        sinon.assert.notCalled(screencastStub);
+        assert.strictEqual(context.getScreenRecorder(), null);
+      });
+    });
+
     it('starts a screencast recording with temp file when no filePath', async () => {
       await withMcpContext(async (response, context) => {
         const mockRecorder = createMockRecorder();
-        const selectedPage = context.getSelectedPptrPage();
+        const selectedPage = context.getSelectedMcpPage().pptrPage;
         const screencastStub = sinon
           .stub(selectedPage, 'screencast')
           .resolves(mockRecorder as never);
@@ -83,10 +133,10 @@ describe('screencast', () => {
         const mockRecorder = createMockRecorder();
         context.setScreenRecorder({
           recorder: mockRecorder as never,
-          filePath: '/tmp/existing.mp4',
+          filePath: path.join(os.tmpdir(), 'existing.mp4'),
         });
 
-        const selectedPage = context.getSelectedPptrPage();
+        const selectedPage = context.getSelectedMcpPage().pptrPage;
         const screencastStub = sinon.stub(selectedPage, 'screencast');
 
         await startScreencast().handler(
@@ -106,14 +156,14 @@ describe('screencast', () => {
 
     it('provides a clear error when ffmpeg is not found', async () => {
       await withMcpContext(async (response, context) => {
-        const selectedPage = context.getSelectedPptrPage();
+        const selectedPage = context.getSelectedMcpPage().pptrPage;
         const error = new Error('spawn ffmpeg ENOENT');
         sinon.stub(selectedPage, 'screencast').rejects(error);
 
         await assert.rejects(
           startScreencast().handler(
             {
-              params: {filePath: '/tmp/test.mp4'},
+              params: {filePath: path.join(os.tmpdir(), 'test.mp4')},
               page: context.getSelectedMcpPage(),
             },
             response,
@@ -126,10 +176,34 @@ describe('screencast', () => {
       });
     });
 
+    it('cleans up the generated temp directory if recording fails to start', async () => {
+      await withMcpContext(async (response, context) => {
+        const selectedPage = context.getSelectedMcpPage().pptrPage;
+        const screencastStub = sinon
+          .stub(selectedPage, 'screencast')
+          .rejects(new Error('spawn ffmpeg ENOENT'));
+
+        await assert.rejects(
+          startScreencast().handler(
+            {params: {}, page: context.getSelectedMcpPage()},
+            response,
+            context,
+          ),
+          /ffmpeg is required for screencast recording/,
+        );
+
+        // The temp directory generateTempFilePath() created must be removed.
+        const tempPath = screencastStub.firstCall.args[0]?.path as string;
+        assert.ok(tempPath);
+        await assert.rejects(fs.access(path.dirname(tempPath)));
+        assert.strictEqual(context.getScreenRecorder(), null);
+      });
+    });
+
     it('passes ffmpegPath from args to puppeteer', async () => {
       await withMcpContext(async (response, context) => {
         const mockRecorder = createMockRecorder();
-        const selectedPage = context.getSelectedPptrPage();
+        const selectedPage = context.getSelectedMcpPage().pptrPage;
         const screencastStub = sinon
           .stub(selectedPage, 'screencast')
           .resolves(mockRecorder as never);
@@ -151,7 +225,7 @@ describe('screencast', () => {
   });
 
   describe('screencast_stop', () => {
-    it('does nothing if no recording is active', async () => {
+    it('returns an error message if no recording is active', async () => {
       await withMcpContext(async (response, context) => {
         assert.strictEqual(context.getScreenRecorder(), null);
         await stopScreencast.handler(
@@ -159,14 +233,18 @@ describe('screencast', () => {
           response,
           context,
         );
-        assert.strictEqual(response.responseLines.length, 0);
+        assert.ok(
+          response.responseLines
+            .join('\n')
+            .includes('no active screencast recording to stop'),
+        );
       });
     });
 
     it('stops an active recording and reports the file path', async () => {
       await withMcpContext(async (response, context) => {
         const mockRecorder = createMockRecorder();
-        const filePath = '/tmp/test-recording.mp4';
+        const filePath = path.join(os.tmpdir(), 'test-recording.mp4');
         context.setScreenRecorder({
           recorder: mockRecorder as never,
           filePath,
@@ -183,7 +261,7 @@ describe('screencast', () => {
         assert.ok(
           response.responseLines
             .join('\n')
-            .includes('stopped and saved to /tmp/test-recording.mp4'),
+            .includes(`stopped and saved to ${filePath}`),
         );
       });
     });
@@ -194,7 +272,7 @@ describe('screencast', () => {
         mockRecorder.stop.rejects(new Error('ffmpeg process error'));
         context.setScreenRecorder({
           recorder: mockRecorder as never,
-          filePath: '/tmp/test.mp4',
+          filePath: path.join(os.tmpdir(), 'test.mp4'),
         });
 
         await assert.rejects(

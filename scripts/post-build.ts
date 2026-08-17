@@ -19,10 +19,19 @@ function writeFile(filePath: string, content: string): void {
 }
 
 function main(): void {
+  const devtoolsTs = path.join(
+    process.cwd(),
+    'src',
+    'third_party',
+    'devtools.ts',
+  );
+  if (fs.existsSync(devtoolsTs)) {
+    fs.unlinkSync(devtoolsTs);
+  }
   const devtoolsThirdPartyPath =
-    'node_modules/chrome-devtools-frontend/front_end/third_party';
+    'third_party/devtools-frontend/front_end/third_party';
   const devtoolsFrontEndCorePath =
-    'node_modules/chrome-devtools-frontend/front_end/core';
+    'third_party/devtools-frontend/front_end/core';
 
   // Create i18n mock
   const i18nDir = path.join(BUILD_DIR, devtoolsFrontEndCorePath, 'i18n');
@@ -60,6 +69,33 @@ export const css = { cssLanguage: { parser: { parse: () => ({ topNode: { getChil
 `;
   writeFile(codeMirrorFile, codeMirrorContent);
 
+  // Create skills mocks
+  const skillsDir = path.join(
+    BUILD_DIR,
+    'third_party',
+    'devtools-frontend',
+    'front_end',
+    'models',
+    'ai_assistance',
+    'skills',
+  );
+  fs.mkdirSync(skillsDir, {recursive: true});
+  const skillMockContent = `
+export const skill = {
+  name: '',
+  description: '',
+  tools: [],
+  systemPrompt: '',
+};
+export default skill;
+`;
+  writeFile(path.join(skillsDir, 'accessibility.skill.js'), skillMockContent);
+  writeFile(path.join(skillsDir, 'network.skill.js'), skillMockContent);
+  writeFile(path.join(skillsDir, 'performance.skill.js'), skillMockContent);
+  writeFile(path.join(skillsDir, 'sources.skill.js'), skillMockContent);
+  writeFile(path.join(skillsDir, 'storage.skill.js'), skillMockContent);
+  writeFile(path.join(skillsDir, 'styling.skill.js'), skillMockContent);
+
   // Create root mock
   const rootDir = path.join(BUILD_DIR, devtoolsFrontEndCorePath, 'root');
   fs.mkdirSync(rootDir, {recursive: true});
@@ -68,6 +104,16 @@ export const css = { cssLanguage: { parser: { parse: () => ({ topNode: { getChil
 export function getChromeVersion() { return ''; };
 export function getRemoteBase() { return null; };
 export const hostConfig = {};
+export const GenAiEnterprisePolicyValue = {
+  ALLOW: 0,
+  ALLOW_WITHOUT_LOGGING: 1,
+  DISABLE: 2,
+};
+export const HostConfigFreestylerExecutionMode = {
+  ALL_SCRIPTS: 'ALL_SCRIPTS',
+  SIDE_EFFECT_FREE_SCRIPTS_ONLY: 'SIDE_EFFECT_FREE_SCRIPTS_ONLY',
+  NO_SCRIPTS: 'NO_SCRIPTS',
+};
 export const GdpProfilesEnterprisePolicyValue = {
   ENABLED: 0,
   ENABLED_WITHOUT_BADGES: 1,
@@ -113,8 +159,8 @@ export const ExperimentName = {
   );
   const codemirrorSrcDir = path.join(
     process.cwd(),
-    'node_modules',
-    'chrome-devtools-frontend',
+    'third_party',
+    'devtools-frontend',
     'front_end',
     'third_party',
     'codemirror',
@@ -133,11 +179,33 @@ export const ExperimentName = {
   }
 
   copyDevToolsDescriptionFiles();
+  makeBinScriptsExecutable();
 }
 
-function copyDevToolsDescriptionFiles() {
+/**
+ * Makes generated JS bin scripts executable so they can be run directly (and
+ * via `npm link` symlinks). tsc does not preserve source file permissions.
+ */
+function makeBinScriptsExecutable(): void {
+  const binDir = path.join(BUILD_DIR, 'src', 'bin');
+  if (!fs.existsSync(binDir)) {
+    return;
+  }
+  for (const entry of fs.readdirSync(binDir)) {
+    if (!entry.endsWith('.js')) {
+      continue;
+    }
+    const filePath = path.join(binDir, entry);
+    const content = fs.readFileSync(filePath, 'utf-8');
+    if (content.startsWith('#!')) {
+      fs.chmodSync(filePath, 0o755);
+    }
+  }
+}
+
+function copyDevToolsDescriptionFiles(): void {
   const devtoolsIssuesDescriptionPath =
-    'node_modules/chrome-devtools-frontend/front_end/models/issues_manager/descriptions';
+    'third_party/devtools-frontend/front_end/models/issues_manager/descriptions';
   const sourceDir = path.join(process.cwd(), devtoolsIssuesDescriptionPath);
   const destDir = path.join(
     BUILD_DIR,

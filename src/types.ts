@@ -31,4 +31,12 @@ export interface EmulationSettings {
   userAgent?: string;
   colorScheme?: 'dark' | 'light';
   viewport?: Viewport;
+  extraHttpHeaders?: Record<string, string>;
+}
+
+export type Logger = ((...args: unknown[]) => void) | undefined;
+
+export interface PaginationOptions {
+  pageSize?: number;
+  pageIdx?: number;
 }
