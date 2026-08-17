@@ -1,39 +1,18 @@
-name: release-please
-
 on:
   push:
-    branches: [main]
+    branches:
+      - main
 
-permissions:
-  contents: write
-  pull-requests: write
-  id-token: write
+permissions: read-all
+name: release-please
 
 jobs:
   release-please:
     runs-on: ubuntu-latest
     steps:
       - uses: googleapis/release-please-action@v5
-        id: release
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - uses: actions/checkout@v4
-        if: ${{ steps.release.outputs.release_created }}
-
-      - uses: actions/setup-node@v6
-        if: ${{ steps.release.outputs.release_created }}
-        with:
-          node-version: 24
-          registry-url: 'https://registry.npmjs.org'
-
-      - run: npm ci
-        if: ${{ steps.release.outputs.release_created }}
-
-      - run: npm run build
-        if: ${{ steps.release.outputs.release_created }}
-
-      - run: npm publish --access public --provenance
-        if: ${{ steps.release.outputs.release_created }}
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          token: ${{ secrets.BROWSER_AUTOMATION_BOT_TOKEN }}
+          target-branch: main
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
