@@ -3,7 +3,7 @@ name: publish-on-tag
 on:
   push:
     tags:
-      - 'chrome-devtools-mcp-v*'
+      - 'opera-devtools-mcp-v*'
   workflow_dispatch:
 
 permissions:
@@ -37,18 +37,6 @@ jobs:
         env:
           NODE_ENV: 'production'
 
-      - name: Publish chrome-devtools-mcp
+      - name: Publish opera-devtools-mcp
         run: |
-          npm publish --provenance --access public
-
-      - name: Publish chrome-devtools
-        run: |
-          node --input-type=module --eval '
-            import * as fs from "node:fs/promises";
-            const json = await fs.readFile("package.json", "utf8");
-            const pkg = JSON.parse(json);
-            pkg.name = "chrome-devtools";
-            await fs.writeFile("package.json", JSON.stringify(pkg, null, 2) + "\n");
-          '
-          echo 'This is the **Chrome DevTools for agents** package. Docs: https://github.com/ChromeDevTools/chrome-devtools-mcp' > README.md
           npm publish --provenance --access public
