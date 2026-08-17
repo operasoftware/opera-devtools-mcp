@@ -8,12 +8,12 @@
 import type fs from 'node:fs';
 
 import type {parseArguments} from '../bin/chrome-devtools-mcp-cli-options.js';
-import type {Channel} from '../browser.js';
 import {
   closeBrowserIfOpen,
   ensureBrowserLaunched,
   getCurrentBrowser,
 } from '../browser.js';
+import {buildLaunchOptions} from './browserLaunch.js';
 import {logger} from '../utils/logger.js';
 
 type ServerArgs = ReturnType<typeof parseArguments>;
@@ -65,43 +65,6 @@ export interface OperaBrowserControl {
 }
 
 /**
- * Mirrors the launch options built by `getContext()` in `../index.ts`. The
- * duplication is deliberate: keeping it here means `index.ts` stays close to
- * upstream. If upstream changes the `ensureBrowserLaunched` call shape, this is
- * the one Opera-side place that has to follow.
- */
-function launchOptions(
-  serverArgs: ServerArgs,
-  logFile: fs.WriteStream | undefined,
-  extraChromeArgs: string[],
-) {
-  const chromeArgs = [
-    ...extraChromeArgs,
-    ...(serverArgs.chromeArg ?? []).map(String),
-  ];
-  if (serverArgs.proxyServer) {
-    chromeArgs.push(`--proxy-server=${serverArgs.proxyServer}`);
-  }
-  return {
-    headless: serverArgs.headless,
-    executablePath: serverArgs.executablePath,
-    channel: serverArgs.channel as Channel,
-    isolated: serverArgs.isolated ?? false,
-    userDataDir: serverArgs.userDataDir,
-    logFile,
-    viewport: serverArgs.viewport,
-    chromeArgs,
-    ignoreDefaultChromeArgs: (serverArgs.ignoreDefaultChromeArg ?? []).map(
-      String,
-    ),
-    acceptInsecureCerts: serverArgs.acceptInsecureCerts,
-    devtools: serverArgs.experimentalDevtools ?? false,
-    enableExtensions: serverArgs.categoryExtensions,
-    viaCli: serverArgs.viaCli,
-  };
-}
-
-/**
  * True when this server launched the browser itself. When the user attached to
  * an existing browser we must never kill and relaunch it.
  */
@@ -148,8 +111,13 @@ export async function ensureBrowserFlagsForTool(
   await deps.closeBrowserIfOpen();
 
   if (needsOperaFlags) {
+    // Launch options come from the shared `buildLaunchOptions` so the relaunch
+    // applies exactly the same flags (including blocklist/allowlist and proxy)
+    // as the normal launch in `index.ts`, plus the automation flags.
     await deps.ensureBrowserLaunched(
-      launchOptions(serverArgs, logFile, OPERA_AUTOMATION_FLAGS),
+      buildLaunchOptions(serverArgs, logFile, {
+        extraChromeArgs: OPERA_AUTOMATION_FLAGS,
+      }),
     );
     browserHasOperaFlags = true;
   }
