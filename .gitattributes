@@ -25,6 +25,7 @@ release-please-config.json             merge=opera-ours
 .release-please-manifest.json          merge=opera-ours
 src/version.ts                         merge=opera-ours
 .github/workflows/*                    merge=opera-ours
+.github/plugin/plugin.json             merge=opera-ours
 .claude-plugin/*                       merge=opera-ours
 
 # Generated artifacts: never hand-merge, always `npm run gen` after the merge.

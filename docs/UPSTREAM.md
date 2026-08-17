@@ -130,7 +130,7 @@ resolve by hand, keeping the Opera side.
 
 `README.md`, `CHANGELOG.md`, `.gitignore`, `.gitattributes`, `docs/troubleshooting.md`,
 `docs/UPSTREAM.md`, `package.json`, `server.json`, `.github/workflows/*`,
-`release-please-config.json`, `.release-please-manifest.json`, `src/version.ts`,
+`.github/plugin/plugin.json`, `release-please-config.json`, `.release-please-manifest.json`, `src/version.ts`,
 `.claude-plugin/*`, `NOTICE`.
 
 `src/version.ts` and `.release-please-manifest.json` carry the fork's own version line, which is

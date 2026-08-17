@@ -1,12 +1,12 @@
 {
-  "name": "chrome-devtools-mcp",
-  "version": "1.7.0",
-  "description": "Reliable automation, in-depth debugging, and performance analysis in Chrome using Chrome DevTools and Puppeteer",
+  "name": "opera-devtools-mcp",
+  "version": "0.3.0",
+  "description": "Automate Opera browsers, including Opera Neon, and their built-in AI features",
   "mcpServers": {
-    "chrome-devtools": {
+    "opera-devtools": {
       "command": "npx",
       "args": [
-        "chrome-devtools-mcp@1.7.0"
+        "opera-devtools-mcp@0.3.0"
       ]
     }
   }
