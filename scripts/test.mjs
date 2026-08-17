@@ -2,6 +2,8 @@
  * @license
  * Copyright 2026 Google LLC
  * SPDX-License-Identifier: Apache-2.0
+ *
+ * Modified by Opera Software AS.
  */
 
 // Note: can be converted to ts file once node 20 support is dropped.
@@ -11,6 +13,12 @@ import {spawn, execSync} from 'node:child_process';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
+
+import {
+  ENV_CRASH_ON_UNCAUGHT,
+  ENV_NO_UPDATE_CHECKS,
+  ENV_NO_USAGE_STATISTICS,
+} from '../build/src/opera/branding.js';
 
 const args = process.argv.slice(2);
 const userArgs = args.filter(arg => !arg.startsWith('-'));
@@ -98,9 +106,9 @@ async function runTests(attempt) {
       stdio: 'inherit',
       env: {
         ...process.env,
-        OPERA_DEVTOOLS_NO_USAGE_STATISTICS: true,
-        OPERA_DEVTOOLS_CRASH_ON_UNCAUGHT: true,
-        OPERA_DEVTOOLS_NO_UPDATE_CHECKS: true,
+        [ENV_NO_USAGE_STATISTICS]: true,
+        [ENV_CRASH_ON_UNCAUGHT]: true,
+        [ENV_NO_UPDATE_CHECKS]: true,
         ...(process.env['RUNNER_DEBUG'] === '1' ? {DEBUG: 'puppeteer:*'} : {}),
       },
     });

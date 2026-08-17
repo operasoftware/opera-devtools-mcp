@@ -12,6 +12,7 @@ import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 
+import {CACHE_DIR_NAME, ENV_NO_UPDATE_CHECKS} from '../opera/branding.js';
 import {VERSION} from '../version.js';
 
 /**
@@ -26,7 +27,7 @@ export function resetUpdateCheckFlagForTesting() {
 }
 
 export async function checkForUpdates(message: string) {
-  if (isChecking || process.env['OPERA_DEVTOOLS_NO_UPDATE_CHECKS']) {
+  if (isChecking || process.env[ENV_NO_UPDATE_CHECKS]) {
     return;
   }
   isChecking = true;
@@ -34,7 +35,7 @@ export async function checkForUpdates(message: string) {
   const cachePath = path.join(
     os.homedir(),
     '.cache',
-    'opera-devtools-mcp',
+    CACHE_DIR_NAME,
     'latest.json',
   );
 
@@ -48,6 +49,10 @@ export async function checkForUpdates(message: string) {
     // Ignore errors reading cache.
   }
 
+  // NOTE: upstream uses `semver.lt(VERSION, cachedVersion)` here. The fork
+  // deliberately compares for inequality, which also reports an "update" when
+  // the installed version is *newer* than the cached snapshot (e.g. after a
+  // downgrade or when running a local pre-release build).
   if (cachedVersion && cachedVersion !== VERSION) {
     console.warn(
       `\nUpdate available: ${VERSION} -> ${cachedVersion}\n${message}\n`,

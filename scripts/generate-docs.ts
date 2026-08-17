@@ -2,16 +2,14 @@
  * @license
  * Copyright 2025 Google LLC
  * SPDX-License-Identifier: Apache-2.0
- *
- * Modified by Opera Software AS.
  */
 
 import fs from 'node:fs';
 
 import type {Tool} from '@modelcontextprotocol/sdk/types.js';
 
-import {cliOptions} from '../build/src/bin/opera-devtools-mcp-cli-options.js';
-import type {ParsedArguments} from '../build/src/bin/opera-devtools-mcp-cli-options.js';
+import {cliOptions} from '../build/src/bin/chrome-devtools-mcp-cli-options.js';
+import type {ParsedArguments} from '../build/src/bin/chrome-devtools-mcp-cli-options.js';
 import {buildFlag} from '../build/src/index.js';
 import {
   ToolCategory,

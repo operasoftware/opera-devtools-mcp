@@ -4,9 +4,9 @@
  * @license
  * Copyright 2026 Google LLC
  * SPDX-License-Identifier: Apache-2.0
+ *
+ * Modified by Opera Software AS.
  */
-
-process.title = 'chrome-devtools';
 
 import process from 'node:process';
 
@@ -20,6 +20,7 @@ import {
 } from '../daemon/client.js';
 import {isDaemonRunning, serializeArgs} from '../daemon/utils.js';
 import {logDisclaimers} from '../index.js';
+import {CLI_BIN_NAME, MCP_BIN_NAME, PACKAGE_NAME} from '../opera/branding.js';
 import {hideBin, yargs, type CallToolResult} from '../third_party/index.js';
 import {checkForUpdates} from '../utils/check-for-updates.js';
 import {VERSION} from '../version.js';
@@ -27,8 +28,10 @@ import {VERSION} from '../version.js';
 import {commands} from './chrome-devtools-cli-options.js';
 import {cliOptions, parseArguments} from './chrome-devtools-mcp-cli-options.js';
 
+process.title = CLI_BIN_NAME;
+
 await checkForUpdates(
-  'Run `npm install -g chrome-devtools-mcp@latest` and `chrome-devtools start` to update and restart the daemon.',
+  `Run \`npm install -g ${PACKAGE_NAME}@latest\` and \`${CLI_BIN_NAME} start\` to update and restart the daemon.`,
 );
 
 async function start(args: string[], sessionId: string) {
@@ -62,11 +65,11 @@ startCliOptions.isolated!.description =
 startCliOptions.categoryExtensions!.default = true;
 
 const y = yargs(hideBin(process.argv))
-  .scriptName('chrome-devtools')
+  .scriptName(CLI_BIN_NAME)
   .showHelpOnFail(true)
-  .usage('chrome-devtools <command> [...args] --flags')
+  .usage(`${CLI_BIN_NAME} <command> [...args] --flags`)
   .usage(
-    `Run 'chrome-devtools <command> --help' for help on the specific command.`,
+    `Run '${CLI_BIN_NAME} <command> --help' for help on the specific command.`,
   )
   .option('sessionId', {
     type: 'string',
@@ -82,7 +85,7 @@ const y = yargs(hideBin(process.argv))
 
 y.command(
   'start',
-  'Start or restart chrome-devtools-mcp',
+  `Start or restart ${MCP_BIN_NAME}`,
   y =>
     y
       .options(startCliOptions)
@@ -110,11 +113,11 @@ y.command(
 
 y.command(
   'status',
-  'Checks if chrome-devtools-mcp is running',
+  `Checks if ${MCP_BIN_NAME} is running`,
   y => y,
   async argv => {
     if (isDaemonRunning(argv.sessionId)) {
-      console.log('chrome-devtools-mcp daemon is running.');
+      console.log(`${MCP_BIN_NAME} daemon is running.`);
       const response = await sendCommand(
         {
           method: 'status',
@@ -138,7 +141,7 @@ y.command(
         process.exit(1);
       }
     } else {
-      console.log('chrome-devtools-mcp daemon is not running.');
+      console.log(`${MCP_BIN_NAME} daemon is not running.`);
     }
     process.exit(0);
   },
@@ -146,7 +149,7 @@ y.command(
 
 y.command(
   'stop',
-  'Stop chrome-devtools-mcp if any',
+  `Stop ${MCP_BIN_NAME} if any`,
   y => y,
   async argv => {
     const sessionId = argv.sessionId as string;

@@ -5,10 +5,13 @@
  * This file is an original work developed by Opera.
  */
 
-import {zod} from '../third_party/index.js';
+import {zod} from '../../third_party/index.js';
+import {ToolCategory} from '../../tools/categories.js';
+import {definePageTool} from '../../tools/ToolDefinition.js';
+import {withServiceWorkerRetry} from '../serviceWorkerRetry.js';
 
-import {ToolCategory} from './categories.js';
-import {definePageTool} from './ToolDefinition.js';
+// NOTE: `createTools` in src/tools/tools.ts does `Object.values(...)` over this
+// module, so every export here must be a tool definition. Put helpers elsewhere.
 
 interface CDPSession {
   send(method: string, params?: Record<string, unknown>): Promise<unknown>;
@@ -18,26 +21,6 @@ interface CDPSession {
 
 const getCDPSession = (page: {_client(): CDPSession}): CDPSession =>
   page._client();
-
-const MAX_SW_RETRIES = 5;
-const SW_RETRY_DELAY_MS = 2500;
-
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-async function withServiceWorkerRetry<T>(fn: () => Promise<T>): Promise<T> {
-  let lastError: Error | undefined;
-  for (let attempt = 0; attempt < MAX_SW_RETRIES; attempt++) {
-    try {
-      return await fn();
-    } catch (e) {
-      lastError = e as Error;
-      if (attempt < MAX_SW_RETRIES - 1) {
-        await sleep(SW_RETRY_DELAY_MS);
-      }
-    }
-  }
-  throw lastError;
-}
 
 const dispatchAction = async (
   session: CDPSession,

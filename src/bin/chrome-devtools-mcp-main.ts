@@ -2,6 +2,8 @@
  * @license
  * Copyright 2025 Google LLC
  * SPDX-License-Identifier: Apache-2.0
+ *
+ * Modified by Opera Software AS.
  */
 
 import '../polyfill.js';
@@ -10,6 +12,12 @@ import process from 'node:process';
 
 import {createMcpServer, logDisclaimers} from '../index.js';
 import {logger, saveLogsToFile} from '../logger.js';
+import {
+  ENV_CRASH_ON_UNCAUGHT,
+  PACKAGE_NAME,
+  PRODUCT_NAME,
+} from '../opera/branding.js';
+import {enforceTelemetryPolicy} from '../opera/policy.js';
 import {ClearcutLogger} from '../telemetry/ClearcutLogger.js';
 import {computeFlagUsage} from '../telemetry/flagUtils.js';
 import {StdioServerTransport} from '../third_party/index.js';
@@ -18,27 +26,27 @@ import {VERSION} from '../version.js';
 
 import {cliOptions, parseArguments} from './chrome-devtools-mcp-cli-options.js';
 
-await checkForUpdates(
-  'Run `npm install chrome-devtools-mcp@latest` to update.',
-);
+await checkForUpdates(`Run \`npm install ${PACKAGE_NAME}@latest\` to update.`);
 
 export const args = parseArguments(VERSION);
 
 const logFile = args.logFile ? saveLogsToFile(args.logFile) : undefined;
 
-if (process.env['CHROME_DEVTOOLS_MCP_CRASH_ON_UNCAUGHT'] !== 'true') {
+enforceTelemetryPolicy(args);
+
+if (process.env[ENV_CRASH_ON_UNCAUGHT] !== 'true') {
   process.on('unhandledRejection', (reason, promise) => {
     logger('Unhandled promise rejection', promise, reason);
   });
 }
 
-logger(`Starting Chrome DevTools MCP Server v${VERSION}`);
+logger(`Starting ${PRODUCT_NAME} v${VERSION}`);
 const {server} = await createMcpServer(args, {
   logFile,
 });
 const transport = new StdioServerTransport();
 await server.connect(transport);
-logger('Chrome DevTools MCP Server connected');
+logger(`${PRODUCT_NAME} connected`);
 logDisclaimers(args);
 void ClearcutLogger.get()?.logDailyActiveIfNeeded();
 void ClearcutLogger.get()?.logServerStart(computeFlagUsage(args, cliOptions));

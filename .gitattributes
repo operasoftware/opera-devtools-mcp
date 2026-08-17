@@ -1,1 +1,35 @@
 * text=auto eol=lf
+
+# --- Upstream seam (see docs/UPSTREAM.md) ---------------------------------
+#
+# `merge=opera-ours` keeps our version of a file during `git merge upstream/main`
+# instead of raising a conflict. It is only correct for files we own outright
+# (prose, config) or that we regenerate afterwards with `npm run gen`.
+#
+# The driver is registered by `scripts/setup-intake.ts`, which `npm run prepare`
+# runs. WITHOUT that registration git silently falls back to a normal merge, so
+# never rely on these entries in a checkout where `npm install` has not run.
+# `npm run verify-upstream-seam` checks that the driver is configured.
+
+# Opera-owned prose and config: ours always wins.
+README.md                              merge=opera-ours
+CHANGELOG.md                           merge=opera-ours
+NOTICE                                 merge=opera-ours
+.gitignore                             merge=opera-ours
+.gitattributes                         merge=opera-ours
+docs/troubleshooting.md                merge=opera-ours
+docs/UPSTREAM.md                       merge=opera-ours
+package.json                           merge=opera-ours
+server.json                            merge=opera-ours
+release-please-config.json             merge=opera-ours
+.release-please-manifest.json          merge=opera-ours
+src/version.ts                         merge=opera-ours
+.github/workflows/*                    merge=opera-ours
+.claude-plugin/*                       merge=opera-ours
+
+# Generated artifacts: never hand-merge, always `npm run gen` after the merge.
+package-lock.json                      merge=opera-ours
+docs/tool-reference.md                 merge=opera-ours
+src/bin/chrome-devtools-cli-options.ts merge=opera-ours
+src/telemetry/tool_call_metrics.json   merge=opera-ours
+src/telemetry/flag_usage_metrics.json  merge=opera-ours

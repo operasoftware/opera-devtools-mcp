@@ -2,8 +2,23 @@
  * @license
  * Copyright 2025 Google LLC
  * SPDX-License-Identifier: Apache-2.0
+ *
+ * Modified by Opera Software AS.
  */
 
+import {
+  CACHE_DIR_NAME,
+  ENV_NO_USAGE_STATISTICS,
+  MCP_BIN_NAME,
+  PACKAGE_NAME,
+  REPO_URL,
+} from '../opera/branding.js';
+import {
+  PERFORMANCE_CRUX_DEFAULT,
+  PERFORMANCE_CRUX_DESCRIPTION,
+  USAGE_STATISTICS_DEFAULT,
+  USAGE_STATISTICS_DESCRIPTION,
+} from '../opera/policy.js';
 import type {YargsOptions} from '../third_party/index.js';
 import {yargs, hideBin} from '../third_party/index.js';
 
@@ -23,8 +38,7 @@ export const cliOptions = {
   },
   browserUrl: {
     type: 'string',
-    description:
-      'Connect to a running, debuggable Chrome instance (e.g. `http://127.0.0.1:9222`). For more details see: https://github.com/ChromeDevTools/chrome-devtools-mcp#connecting-to-a-running-chrome-instance.',
+    description: `Connect to a running, debuggable Chrome instance (e.g. \`http://127.0.0.1:9222\`). For more details see: ${REPO_URL}#connecting-to-a-running-chrome-instance.`,
     alias: 'u',
     conflicts: ['wsEndpoint'],
     coerce: (url: string | undefined) => {
@@ -105,8 +119,7 @@ export const cliOptions = {
   },
   userDataDir: {
     type: 'string',
-    description:
-      'Path to the user data directory for Chrome. Default is $HOME/.cache/chrome-devtools-mcp/chrome-profile$CHANNEL_SUFFIX_IF_NON_STABLE',
+    description: `Path to the user data directory for Chrome. Default is $HOME/.cache/${CACHE_DIR_NAME}/chrome-profile$CHANNEL_SUFFIX_IF_NON_STABLE`,
     conflicts: ['browserUrl', 'wsEndpoint', 'isolated'],
   },
   channel: {
@@ -207,13 +220,11 @@ export const cliOptions = {
   },
   chromeArg: {
     type: 'array',
-    describe:
-      'Additional arguments for Chrome. Only applies when Chrome is launched by chrome-devtools-mcp.',
+    describe: `Additional arguments for Chrome. Only applies when Chrome is launched by ${MCP_BIN_NAME}.`,
   },
   ignoreDefaultChromeArg: {
     type: 'array',
-    describe:
-      'Explicitly disable default arguments for Chrome. Only applies when Chrome is launched by chrome-devtools-mcp.',
+    describe: `Explicitly disable default arguments for Chrome. Only applies when Chrome is launched by ${MCP_BIN_NAME}.`,
   },
   categoryEmulation: {
     type: 'boolean',
@@ -245,15 +256,13 @@ export const cliOptions = {
   },
   performanceCrux: {
     type: 'boolean',
-    default: true,
-    describe:
-      'Set to false to disable sending URLs from performance traces to CrUX API to get field performance data.',
+    default: PERFORMANCE_CRUX_DEFAULT,
+    describe: PERFORMANCE_CRUX_DESCRIPTION,
   },
   usageStatistics: {
     type: 'boolean',
-    default: true,
-    describe:
-      'Set to false to opt-out of usage statistics collection. Google collects usage data to improve the tool, handled under the Google Privacy Policy (https://policies.google.com/privacy). This is independent from Chrome browser metrics. Disabled if `CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS` or `CI` env variables are set.',
+    default: USAGE_STATISTICS_DEFAULT,
+    describe: USAGE_STATISTICS_DESCRIPTION,
   },
   clearcutEndpoint: {
     type: 'string',
@@ -297,7 +306,7 @@ export function parseArguments(
   env = process.env,
 ) {
   const yargsInstance = yargs(hideBin(argv))
-    .scriptName('npx chrome-devtools-mcp@latest')
+    .scriptName(`npx ${PACKAGE_NAME}@latest`)
     .options(cliOptions)
     .check(args => {
       // We can't set default in the options else
@@ -310,9 +319,9 @@ export function parseArguments(
       ) {
         args.channel = 'stable';
       }
-      if (env['CI'] || env['CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS']) {
+      if (env['CI'] || env[ENV_NO_USAGE_STATISTICS]) {
         console.error(
-          "turning off usage statistics. process.env['CI'] || process.env['CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS'] is set.",
+          `turning off usage statistics. process.env['CI'] || process.env['${ENV_NO_USAGE_STATISTICS}'] is set.`,
         );
         args.usageStatistics = false;
       }
@@ -369,7 +378,7 @@ export function parseArguments(
       ],
       [
         '$0 --no-usage-statistics',
-        'Do not send usage statistics https://github.com/ChromeDevTools/chrome-devtools-mcp#usage-statistics.',
+        `Do not send usage statistics ${REPO_URL}#usage-statistics.`,
       ],
       [
         '$0 --no-performance-crux',
