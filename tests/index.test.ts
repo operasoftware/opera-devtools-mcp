@@ -441,36 +441,44 @@ describe('e2e', () => {
 async function getToolsWithFilteredCategories(
   filterOutCategories: ToolCategory[] = [],
 ): Promise<string[]> {
-  const files = fs.readdirSync('build/src/tools');
+  // The Opera tools live outside `build/src/tools` (in `src/opera/tools`), so
+  // they are crawled separately; `createTools` registers both sets.
+  const toolDirs: Array<[dir: string, importPrefix: string]> = [
+    ['build/src/tools', '../src/tools/'],
+    ['build/src/opera/tools', '../src/opera/tools/'],
+  ];
   const definedNames = [];
-  for (const file of files) {
-    if (
-      !file.endsWith('.js') ||
-      file === 'ToolDefinition.js' ||
-      file === 'tools.js' ||
-      file === 'slim'
-    ) {
-      continue;
-    }
-    const fileTools = await import(`../src/tools/${file}`);
-
-    for (const maybeTool of Object.values<unknown>(fileTools)) {
-      let tool;
-      if (typeof maybeTool === 'function') {
-        tool = (maybeTool as (val: boolean) => ToolDefinition)(false);
-      } else {
-        tool = maybeTool as ToolDefinition;
-      }
-
-      // Skipping all files that are not tool files
-      if (tool === null || typeof tool !== 'object' || !('name' in tool)) {
+  for (const [dir, importPrefix] of toolDirs) {
+    const files = fs.readdirSync(dir);
+    for (const file of files) {
+      if (
+        !file.endsWith('.js') ||
+        file === 'ToolDefinition.js' ||
+        file === 'tools.js' ||
+        file === 'slim'
+      ) {
         continue;
       }
+      const fileTools = await import(`${importPrefix}${file}`);
 
-      if (toolShouldBeSkipped(tool, filterOutCategories)) {
-        continue;
+      for (const maybeTool of Object.values<unknown>(fileTools)) {
+        let tool;
+        if (typeof maybeTool === 'function') {
+          tool = (maybeTool as (val: boolean) => ToolDefinition)(false);
+        } else {
+          tool = maybeTool as ToolDefinition;
+        }
+
+        // Skipping all files that are not tool files
+        if (tool === null || typeof tool !== 'object' || !('name' in tool)) {
+          continue;
+        }
+
+        if (toolShouldBeSkipped(tool, filterOutCategories)) {
+          continue;
+        }
+        definedNames.push(tool.name);
       }
-      definedNames.push(tool.name);
     }
   }
   return definedNames;

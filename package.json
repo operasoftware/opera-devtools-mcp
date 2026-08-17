@@ -92,6 +92,7 @@
   "overrides": {
     "eslint-plugin-import": {
       "eslint": "$eslint"
-    }
+    },
+    "puppeteer-core": "$puppeteer"
   }
 }
