@@ -1004,6 +1004,32 @@ export const commands: Commands = {
       },
     },
   },
+  opera_call_mcp_tool: {
+    description:
+      'Execute a tool on a specific MCP server registered in the browser. Use opera_list_mcp_servers to discover available servers and tools. Only available when connected to Opera Neon.',
+    category: 'Opera',
+    args: {
+      server: {
+        name: 'server',
+        type: 'string',
+        description: 'The MCP server name (from opera_list_mcp_servers).',
+        required: true,
+      },
+      tool: {
+        name: 'tool',
+        type: 'string',
+        description: 'The tool name to execute on the server.',
+        required: true,
+      },
+      parameters: {
+        name: 'parameters',
+        type: 'object',
+        description:
+          'Parameters to pass to the tool. Omit if the tool takes none.',
+        required: false,
+      },
+    },
+  },
   opera_chat: {
     description:
       "Send a chat prompt to Opera's built-in AI and return the response. Only available when connected to Opera Neon.",
@@ -1033,6 +1059,25 @@ export const commands: Commands = {
         name: 'prompt',
         type: 'string',
         description: 'The action to perform, described in natural language.',
+        required: true,
+      },
+    },
+  },
+  opera_list_mcp_servers: {
+    description:
+      'List MCP servers registered in the browser, including their connection status. Only available when connected to Opera Neon.',
+    category: 'Opera',
+    args: {},
+  },
+  opera_list_mcp_tools: {
+    description:
+      'List the tools exposed by a single MCP server. Prefer opera_list_mcp_servers when discovering everything at once; use this for a targeted refresh of one server. Only available when connected to Opera Neon.',
+    category: 'Opera',
+    args: {
+      server: {
+        name: 'server',
+        type: 'string',
+        description: 'The MCP server name (from opera_list_mcp_servers).',
         required: true,
       },
     },

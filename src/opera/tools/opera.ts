@@ -283,3 +283,124 @@ export const operaListModels = definePageTool({
     }
   },
 });
+
+export const operaListMcpServers = definePageTool({
+  name: 'opera_list_mcp_servers',
+  description:
+    'List MCP servers registered in the browser, ' +
+    'including their connection status. ' +
+    'Only available when connected to Opera Neon.',
+  blockedByDialog: false,
+  verifyFilesSchema: {},
+  annotations: {
+    category: ToolCategory.OPERA,
+    readOnlyHint: true,
+  },
+  schema: {},
+  handler: async (request, response) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const session = getCDPSession(request.page.pptrPage as any);
+    try {
+      const result = await dispatchAction(session, {
+        action: 'listMcpServers',
+      });
+      response.appendResponseLine(result);
+    } catch (e) {
+      response.appendResponseLine(
+        `Opera.dispatchAction(listMcpServers) failed with error: ${(e as Error).message}`,
+      );
+    }
+  },
+});
+
+export const operaListMcpTools = definePageTool({
+  name: 'opera_list_mcp_tools',
+  description:
+    'List the tools exposed by a single MCP server. Prefer opera_list_mcp_servers ' +
+    'when discovering everything at once; use this for a targeted refresh of one server. ' +
+    'Only available when connected to Opera Neon.',
+  blockedByDialog: false,
+  verifyFilesSchema: {},
+  annotations: {
+    category: ToolCategory.OPERA,
+    readOnlyHint: true,
+  },
+  schema: {
+    server: zod
+      .string()
+      .min(1)
+      .describe('The MCP server name (from opera_list_mcp_servers).'),
+  },
+  handler: async (request, response) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const session = getCDPSession(request.page.pptrPage as any);
+    try {
+      const result = await dispatchAction(session, {
+        action: 'listMcpTools',
+        server: request.params.server,
+      });
+      response.appendResponseLine(result);
+    } catch (e) {
+      response.appendResponseLine(
+        `Opera.dispatchAction(listMcpTools) failed with error: ${(e as Error).message}`,
+      );
+    }
+  },
+});
+
+export const operaCallMcpTool = definePageTool({
+  name: 'opera_call_mcp_tool',
+  description:
+    'Execute a tool on a specific MCP server registered in the browser. ' +
+    'Use opera_list_mcp_servers to discover available ' +
+    'servers and tools. ' +
+    'Only available when connected to Opera Neon.',
+  blockedByDialog: false,
+  verifyFilesSchema: {},
+  annotations: {
+    category: ToolCategory.OPERA,
+    readOnlyHint: false,
+  },
+  schema: {
+    server: zod
+      .string()
+      .min(1)
+      .describe('The MCP server name (from opera_list_mcp_servers).'),
+    tool: zod
+      .string()
+      .min(1)
+      .describe('The tool name to execute on the server.'),
+    parameters: zod
+      .record(zod.unknown())
+      .optional()
+      .describe('Parameters to pass to the tool. Omit if the tool takes none.'),
+  },
+  handler: async (request, response) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const session = getCDPSession(request.page.pptrPage as any);
+    try {
+      const payload: Record<string, unknown> = {
+        action: 'callMcpTool',
+        server: request.params.server,
+        tool: request.params.tool,
+      };
+      if (request.params.parameters !== undefined) {
+        payload['parameters'] = request.params.parameters;
+      }
+      const result = await dispatchWithStreamedResponse(
+        session,
+        payload,
+        chunk => response.sendLog(chunk),
+        request.signal,
+      );
+      response.appendResponseLine(result);
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') {
+        throw e;
+      }
+      response.appendResponseLine(
+        `Opera.dispatchWithStreamedResponse(callMcpTool) failed with error: ${(e as Error).message}`,
+      );
+    }
+  },
+});

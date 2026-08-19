@@ -991,5 +991,35 @@
         "argType": "number"
       }
     ]
+  },
+  {
+    "name": "opera_call_mcp_tool",
+    "args": [
+      {
+        "name": "server_length",
+        "argType": "number"
+      },
+      {
+        "name": "tool_length",
+        "argType": "number"
+      },
+      {
+        "name": "parameters_count",
+        "argType": "number"
+      }
+    ]
+  },
+  {
+    "name": "opera_list_mcp_servers",
+    "args": []
+  },
+  {
+    "name": "opera_list_mcp_tools",
+    "args": [
+      {
+        "name": "server_length",
+        "argType": "number"
+      }
+    ]
   }
 ]

@@ -90,6 +90,7 @@ a result:
 | `src/bin/chrome-devtools-mcp-cli-options.ts`                   | Branding strings; `performanceCrux` + `usageStatistics` default/help text from `opera/policy.ts`                                                                             | yes                               |
 | `src/bin/chrome-devtools-mcp-main.ts`                          | Branding strings; calls `enforceTelemetryPolicy()` from `opera/policy.ts`                                                                                                    | yes                               |
 | `src/bin/chrome-devtools-mcp.ts`, `src/bin/chrome-devtools.ts` | Branding strings                                                                                                                                                             | yes                               |
+| `src/telemetry/transformation.ts`                           | Adds `ZodRecord` to the supported telemetry zod types (used by `parameters` on `opera_call_mcp_tool`); maps it to a `_count` metric                                             | yes                               |
 | `scripts/generate-cli.ts`                                      | Opera attribution in the file header and in the generated-file header template                                                                                               | yes                               |
 | `scripts/post-build.ts`                                        | Adds `makeBinScriptsExecutable()` so generated JS bin scripts stay executable (tsc does not preserve file permissions)                                                       | yes                               |
 | `scripts/test.js`                                              | Opera env var keys                                                                                                                                                           | yes                               |
@@ -109,6 +110,7 @@ wrong place.
 | `tests/utils/check-for-updates.test.ts` | Opera env var key; drops upstream's downgrade case (see `src/utils/check-for-updates.ts`) |
 | `tests/daemon/utils.test.ts`            | `APP_NAME` uses the Opera package name                                                    |
 | `tests/ToolHandler.test.ts`             | Opera env var keys, plus coverage for the `OperaToolHooks` seam                           |
+| `tests/telemetry/transformation.test.ts` | Adds coverage for `ZodRecord` telemetry handling (count of record keys)                  |
 
 ### Upstream files we rename or delete
 

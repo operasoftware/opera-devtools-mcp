@@ -141,6 +141,19 @@ describe('sanitizeParams', () => {
     assert.strictEqual(sanitized.str10001_length, 10000); // snaps to 10000
   });
 
+  it('counts keys of a record parameter', () => {
+    const schema = {
+      parameters: zod.record(zod.unknown()),
+    };
+    const params = {
+      parameters: {foo: 1, bar: 'baz', qux: true},
+    };
+
+    const sanitized = sanitizeParams(params, schema);
+
+    assert.deepStrictEqual(sanitized, {parameters_count: 3});
+  });
+
   it('throws error for unsupported types', () => {
     const schema = {
       myObj: zod.object({foo: zod.string()}),

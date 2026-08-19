@@ -52,9 +52,12 @@
   - [`get_heapsnapshot_retainers`](#get_heapsnapshot_retainers)
   - [`get_heapsnapshot_retaining_paths`](#get_heapsnapshot_retaining_paths)
   - [`get_heapsnapshot_summary`](#get_heapsnapshot_summary)
-- **[Opera](#opera)** (5 tools)
+- **[Opera](#opera)** (8 tools)
+  - [`opera_call_mcp_tool`](#opera_call_mcp_tool)
   - [`opera_chat`](#opera_chat)
   - [`opera_do`](#opera_do)
+  - [`opera_list_mcp_servers`](#opera_list_mcp_servers)
+  - [`opera_list_mcp_tools`](#opera_list_mcp_tools)
   - [`opera_list_models`](#opera_list_models)
   - [`opera_make`](#opera_make)
   - [`opera_research`](#opera_research)
@@ -608,6 +611,18 @@ in the DevTools Elements panel (if any).
 
 ## Opera
 
+### `opera_call_mcp_tool`
+
+**Description:** Execute a tool on a specific MCP server registered in the browser. Use [`opera_list_mcp_servers`](#opera_list_mcp_servers) to discover available servers and tools. Only available when connected to Opera Neon.
+
+**Parameters:**
+
+- **server** (string) **(required)**: The MCP server name (from [`opera_list_mcp_servers`](#opera_list_mcp_servers)).
+- **tool** (string) **(required)**: The tool name to execute on the server.
+- **parameters** (unknown) _(optional)_: Parameters to pass to the tool. Omit if the tool takes none.
+
+---
+
 ### `opera_chat`
 
 **Description:** Send a chat prompt to Opera's built-in AI and return the response. Only available when connected to Opera Neon.
@@ -626,6 +641,24 @@ in the DevTools Elements panel (if any).
 **Parameters:**
 
 - **prompt** (string) **(required)**: The action to perform, described in natural language.
+
+---
+
+### `opera_list_mcp_servers`
+
+**Description:** List MCP servers registered in the browser, including their connection status. Only available when connected to Opera Neon.
+
+**Parameters:** None
+
+---
+
+### `opera_list_mcp_tools`
+
+**Description:** List the tools exposed by a single MCP server. Prefer [`opera_list_mcp_servers`](#opera_list_mcp_servers) when discovering everything at once; use this for a targeted refresh of one server. Only available when connected to Opera Neon.
+
+**Parameters:**
+
+- **server** (string) **(required)**: The MCP server name (from [`opera_list_mcp_servers`](#opera_list_mcp_servers)).
 
 ---
 
