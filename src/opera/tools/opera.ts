@@ -303,6 +303,7 @@ export const operaListMcpServers = definePageTool({
     try {
       const result = await dispatchAction(session, {
         action: 'listMcpServers',
+        type: 'LIST_SERVERS',
       });
       response.appendResponseLine(result);
     } catch (e) {
@@ -338,6 +339,7 @@ export const operaListMcpTools = definePageTool({
       const result = await dispatchAction(session, {
         action: 'listMcpTools',
         server: request.params.server,
+        type: 'LIST_TOOLS',
       });
       response.appendResponseLine(result);
     } catch (e) {
@@ -382,7 +384,8 @@ export const operaCallMcpTool = definePageTool({
       const payload: Record<string, unknown> = {
         action: 'callMcpTool',
         server: request.params.server,
-        tool: request.params.tool,
+        toolName: request.params.tool,
+        type: 'EXECUTE_TOOL',
       };
       if (request.params.parameters !== undefined) {
         payload['parameters'] = request.params.parameters;
