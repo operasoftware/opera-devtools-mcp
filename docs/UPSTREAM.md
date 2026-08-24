@@ -69,6 +69,7 @@ a result:
 | `src/opera/tools/opera.ts`                                                                                                 | The five `opera_*` tools                                                                                   |
 | `src/map-extensions.d.ts`                                                                                                  | `Map.getOrInsert*` shims for chrome-devtools-frontend — **temporary**, drop when the TS lib has them       |
 | `tests/opera/opera.test.ts`                                                                                                | Unit coverage for the Opera tools                                                                          |
+| `tests/opera/version.test.ts`                                                                                              | Asserts `src/version.ts` matches `package.json` — a release must bump both                                 |
 | `src/bin/opera-devtools-mcp.ts`, `src/bin/opera-devtools.ts`                                                               | Opera-named bin entries (`package.json` `bin`); one-line `import` of the upstream file                     |
 | `src/bin/opera-devtools-mcp-cli-options.ts`, `src/bin/opera-devtools-cli-options.ts`, `src/bin/opera-devtools-mcp-main.ts` | Compatibility `export *` shims over the upstream files                                                     |
 
