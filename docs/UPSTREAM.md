@@ -78,6 +78,7 @@ a result:
 | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
 | `src/ToolHandler.ts`                                           | Optional 5th ctor arg `hooks`; `handle(params, extra)`; three `this.hooks?.` call sites; `guard?.dispose()`; CLI name in `buildDisabledMessage`                              | yes                               |
 | `src/index.ts`                                                 | Builds `operaHooks`, passes them to `ToolHandler`, threads `extra`; `logDisclaimers` uses `opera/policy.ts`; `getContext` builds launch options via `opera/browserLaunch.ts` | yes                               |
+| `src/McpPage.ts`                                               | `resolveElementHandle` reports failed lookups separately from resolved-but-absent elements                                                                                   | yes                               |
 | `src/tools/categories.ts`                                      | `OPERA` enum member + label                                                                                                                                                  | yes                               |
 | `src/tools/tools.ts`                                           | Registers the Opera tools                                                                                                                                                    | yes                               |
 | `eslint.config.js`                                             | `enforce-zod-schema` glob also covers `src/opera/tools/**`                                                                                                                   | yes                               |
@@ -90,7 +91,7 @@ a result:
 | `src/bin/chrome-devtools-mcp-cli-options.ts`                   | Branding strings; `performanceCrux` + `usageStatistics` default/help text from `opera/policy.ts`                                                                             | yes                               |
 | `src/bin/chrome-devtools-mcp-main.ts`                          | Branding strings; calls `enforceTelemetryPolicy()` from `opera/policy.ts`                                                                                                    | yes                               |
 | `src/bin/chrome-devtools-mcp.ts`, `src/bin/chrome-devtools.ts` | Branding strings                                                                                                                                                             | yes                               |
-| `src/telemetry/transformation.ts`                           | Adds `ZodRecord` to the supported telemetry zod types (used by `parameters` on `opera_call_mcp_tool`); maps it to a `_count` metric                                             | yes                               |
+| `src/telemetry/transformation.ts`                              | Adds `ZodRecord` to the supported telemetry zod types (used by `parameters` on `opera_call_mcp_tool`); maps it to a `_count` metric                                          | yes                               |
 | `scripts/generate-cli.ts`                                      | Opera attribution in the file header and in the generated-file header template                                                                                               | yes                               |
 | `scripts/post-build.ts`                                        | Adds `makeBinScriptsExecutable()` so generated JS bin scripts stay executable (tsc does not preserve file permissions)                                                       | yes                               |
 | `scripts/test.js`                                              | Opera env var keys                                                                                                                                                           | yes                               |
@@ -102,15 +103,16 @@ These are name changes, not behaviour changes: the fork's binary, package and en
 so the assertion strings do too. A test that needs a behavioural change indicates the seam is in the
 wrong place.
 
-| Path                                    | Divergence                                                                                |
-| --------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `tests/utils.ts`                        | `CLI_PATH` and the daemon status strings use the Opera names                              |
-| `tests/index.test.ts`                   | Opera bin path + env var key                                                              |
-| `tests/cli.test.ts`                     | Opera package name; `performanceCrux`/`usageStatistics` expected to default to `false`    |
-| `tests/utils/check-for-updates.test.ts` | Opera env var key; drops upstream's downgrade case (see `src/utils/check-for-updates.ts`) |
-| `tests/daemon/utils.test.ts`            | `APP_NAME` uses the Opera package name                                                    |
-| `tests/ToolHandler.test.ts`             | Opera env var keys, plus coverage for the `OperaToolHooks` seam                           |
-| `tests/telemetry/transformation.test.ts` | Adds coverage for `ZodRecord` telemetry handling (count of record keys)                  |
+| Path                                     | Divergence                                                                                                   |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `tests/utils.ts`                         | `CLI_PATH` and the daemon status strings use the Opera names                                                 |
+| `tests/index.test.ts`                    | Opera bin path + env var key                                                                                 |
+| `tests/cli.test.ts`                      | Opera package name; `performanceCrux`/`usageStatistics` expected to default to `false`                       |
+| `tests/utils/check-for-updates.test.ts`  | Opera env var key; drops upstream's downgrade case (see `src/utils/check-for-updates.ts`)                    |
+| `tests/daemon/utils.test.ts`             | `APP_NAME` uses the Opera package name                                                                       |
+| `tests/ToolHandler.test.ts`              | Opera env var keys, plus coverage for the `OperaToolHooks` seam                                              |
+| `tests/telemetry/transformation.test.ts` | Adds coverage for `ZodRecord` telemetry handling (count of record keys)                                      |
+| `tests/McpPage.test.ts`                  | Adds coverage for `resolveElementHandle` distinguishing a rejected lookup from a resolved-but-absent element |
 
 ### Upstream files we rename or delete
 
