@@ -6,4 +6,4 @@
  * Modified by Opera Software AS.
  */
 
-export const VERSION = '0.4.0';
+export const VERSION = '0.4.2';
