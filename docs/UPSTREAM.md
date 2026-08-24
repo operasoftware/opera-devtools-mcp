@@ -124,6 +124,7 @@ resolve by hand, keeping the Opera side.
 | `tests/e2e/chrome-devtools-commands.test.ts`, `tests/e2e/chrome-devtools-disclaimers.test.ts`, `tests/e2e/chrome-devtools-start-stop.test.ts`, `tests/e2e/chrome-devtools-status.test.ts` | Renamed to `opera-devtools-*`; they drive the Opera-named bin                   |
 | `tests/e2e/telemetry.test.ts`                                                                                                                                                             | Deleted — Opera forces telemetry off, so there is no upload path left to assert |
 | `AGENTS.md`                                                                                                                                                                               | Deleted in favour of Opera's own agent docs                                     |
+| `server.json`, `scripts/verify-server-json-version.ts`, `.github/workflows/publish-to-mcp-registry-on-tag.yml`                                                                            | Deleted — the fork publishes to npm only, never to the MCP registry             |
 
 ### Generated — never hand-merge, always regenerate
 
@@ -133,11 +134,14 @@ resolve by hand, keeping the Opera side.
 ### Opera-owned prose / config (merge=opera-ours)
 
 `README.md`, `CHANGELOG.md`, `.gitignore`, `.gitattributes`, `docs/troubleshooting.md`,
-`docs/UPSTREAM.md`, `package.json`, `server.json`, `.github/workflows/*`,
+`docs/UPSTREAM.md`, `package.json`, `.github/workflows/*`,
 `.github/plugin/plugin.json`, `src/version.ts`, `.claude-plugin/*`, `NOTICE`.
 
 `src/version.ts` carries the fork's own version line, which is independent of upstream's.
 The fork publishes to npm on release tags via the `publish-on-tag` workflow (OIDC).
+It does not publish to the MCP registry: upstream's registry workflow, `server.json` and the
+`verify-server-json-version` script are deleted, so a release bumps only `package.json` and
+`package-lock.json`.
 
 ## Deliberately NOT upstreamed
 

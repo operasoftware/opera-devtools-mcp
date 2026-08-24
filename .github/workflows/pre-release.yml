@@ -39,8 +39,5 @@ jobs:
         env:
           NODE_ENV: 'production'
 
-      - name: Verify server.json
-        run: npm run verify-server-json-version
-
       - name: Verify npm package
         run: npm run verify-npm-package
