@@ -29,7 +29,6 @@
     "prepare": "node scripts/prepare.ts && node scripts/setup-intake.ts",
     "sync": "npm ci && git submodule update --init",
     "verify-upstream-seam": "node scripts/verify-upstream-seam.ts",
-    "verify-server-json-version": "node scripts/verify-server-json-version.ts",
     "update-lighthouse": "node scripts/update-lighthouse.ts",
     "update-metrics": "node scripts/update_metrics.ts",
     "verify-npm-package": "node scripts/verify-npm-package.js",

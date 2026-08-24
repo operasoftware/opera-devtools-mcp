@@ -20,6 +20,10 @@
  *    checkout. An unregistered driver is not an error to git; it just falls
  *    back to a normal merge, which is the failure mode `.gitattributes` exists
  *    to prevent.
+ * 4. Every path registered as renamed or deleted must stay gone. The merge
+ *    driver does not apply to a delete: git reports a modify/delete conflict
+ *    and leaves upstream's copy in the tree, so a reflexive `git add -A`
+ *    resurrects the file silently.
  *
  * Stale registry rows (registered, but no longer diverging) are reported as
  * warnings, not failures — they only mean the registry can be trimmed.
@@ -36,6 +40,7 @@ const UPSTREAM_DOC = path.join('docs', 'UPSTREAM.md');
 const GITATTRIBUTES = '.gitattributes';
 const DRIVER_NAME = 'opera-ours';
 const MODIFIED_HEADING = 'Upstream files we modify';
+const DELETED_HEADING = 'Upstream files we rename or delete';
 
 function git(args: string[]): string {
   return execFileSync('git', args, {
@@ -269,6 +274,23 @@ function main(): void {
     warnings.push(
       `${stale.length} registry entr(ies) no longer differ from upstream and can be dropped:\n` +
         stale.map(entry => `    ${entry}`).join('\n'),
+    );
+  }
+
+  const deleted = readRegisteredPaths(
+    readRegistrySubsection(section, DELETED_HEADING),
+  );
+  const resurrected = [...deleted]
+    .filter(entry => !entry.includes('*'))
+    .filter(entry => gitOk(['cat-file', '-e', `${base}:${entry}`]))
+    .filter(entry => fs.existsSync(entry))
+    .sort();
+  if (resurrected.length) {
+    errors.push(
+      `${resurrected.length} path(s) registered as renamed or deleted exist in the working tree:\n` +
+        resurrected.map(entry => `    ${entry}`).join('\n') +
+        `\n  An intake merge probably restored them: the merge driver does not apply to a\n` +
+        `  delete, so git leaves upstream's copy in the tree. Fix: git rm <path>`,
     );
   }
 
