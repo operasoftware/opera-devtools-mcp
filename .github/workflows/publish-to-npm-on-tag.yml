@@ -37,6 +37,11 @@ jobs:
         env:
           NODE_ENV: 'production'
 
+      - name: Verify tarball and release tag
+        run: npm run verify-npm-package
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+
       - name: Publish opera-devtools-mcp
         run: |
           npm publish --provenance --access public
