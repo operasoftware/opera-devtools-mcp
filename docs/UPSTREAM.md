@@ -117,7 +117,9 @@ wrong place.
 ### Upstream files we rename or delete
 
 The merge driver does not apply to these. Git reports a rename/modify or delete/modify conflict;
-resolve by hand, keeping the Opera side.
+resolve by hand, keeping the Opera side. Git leaves upstream's copy in the tree when it does, so a
+reflexive `git add -A` brings the file back — `npm run verify-upstream-seam` fails if any path in
+this table reappears.
 
 | Path                                                                                                                                                                                      | What we did                                                                     |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
