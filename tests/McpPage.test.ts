@@ -7,9 +7,32 @@
 import assert from 'node:assert';
 import {describe, it} from 'node:test';
 
+import type {McpPage} from '../src/McpPage.js';
 import {replaceHtmlElementsWithUids} from '../src/McpPage.js';
 import type {JSONSchema7Definition} from '../src/third_party/index.js';
+import {TextSnapshot} from '../src/TextSnapshot.js';
+import type {TextSnapshotNode} from '../src/types.js';
 import {withMcpContext} from './utils.js';
+
+function installFakeSnapshotNode(
+  page: McpPage,
+  uid: string,
+  elementHandle: TextSnapshotNode['elementHandle'],
+) {
+  const node: TextSnapshotNode = {
+    role: 'button',
+    id: uid,
+    children: [],
+    elementHandle,
+  };
+  page.textSnapshot = new TextSnapshot({
+    root: node,
+    idToNode: new Map([[uid, node]]),
+    snapshotId: '1',
+    hasSelectedElement: false,
+    verbose: false,
+  });
+}
 
 describe('replaceHtmlElementsWithUids', () => {
   it('does nothing for boolean schemas', () => {
@@ -272,6 +295,38 @@ describe('McpPage', () => {
 
       // @ts-expect-error Internal Puppeteer API
       assert.ok(handle.disposed);
+    });
+  });
+
+  it('surfaces the underlying error when elementHandle() rejects', async () => {
+    await withMcpContext(async (_response, context) => {
+      const page = context.getSelectedMcpPage();
+      const uid = 'test-uid';
+      installFakeSnapshotNode(page, uid, () =>
+        Promise.reject(new Error('detached from document')),
+      );
+
+      await assert.rejects(page.getElementByUid(uid), (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.strictEqual(
+          error.message,
+          `Failed to resolve element with uid ${uid}: detached from document`,
+        );
+        return true;
+      });
+    });
+  });
+
+  it('reports a missing element when elementHandle() resolves to null', async () => {
+    await withMcpContext(async (_response, context) => {
+      const page = context.getSelectedMcpPage();
+      const uid = 'test-uid';
+      installFakeSnapshotNode(page, uid, () => Promise.resolve(null));
+
+      await assert.rejects(
+        page.getElementByUid(uid),
+        new RegExp(`Element with uid ${uid} no longer exists on the page\\.`),
+      );
     });
   });
 });

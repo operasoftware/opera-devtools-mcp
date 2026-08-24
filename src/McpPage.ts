@@ -653,18 +653,19 @@ export class McpPage implements ContextPage {
     node: TextSnapshotNode,
     uid: string,
   ): Promise<ElementHandle<Element>> {
-    const message = `Element with uid ${uid} no longer exists on the page.`;
+    let handle: ElementHandle<Element> | null;
     try {
-      const handle = await node.elementHandle();
-      if (!handle) {
-        throw new Error(message);
-      }
-      return handle;
+      handle = await node.elementHandle();
     } catch (error) {
-      throw new Error(message, {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to resolve element with uid ${uid}: ${reason}`, {
         cause: error,
       });
     }
+    if (!handle) {
+      throw new Error(`Element with uid ${uid} no longer exists on the page.`);
+    }
+    return handle;
   }
 
   getAXNodeByUid(uid: string) {
