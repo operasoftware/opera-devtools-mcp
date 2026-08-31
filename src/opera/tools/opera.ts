@@ -436,14 +436,8 @@ export const operaRegisterMcpServer = definePageTool({
     readOnlyHint: false,
   },
   schema: {
-    server: zod
-      .string()
-      .min(1)
-      .describe('The MCP server name to register.'),
-    url: zod
-      .string()
-      .min(1)
-      .describe('The HTTP URL of the MCP server.'),
+    server: zod.string().min(1).describe('The MCP server name to register.'),
+    url: zod.string().min(1).describe('The HTTP URL of the MCP server.'),
   },
   handler: async (request, response) => {
     // puppeteer's _client() is internal; cast to the shape getCDPSession needs
@@ -479,10 +473,7 @@ export const operaConnectMcpServer = definePageTool({
     readOnlyHint: false,
   },
   schema: {
-    server: zod
-      .string()
-      .min(1)
-      .describe('The MCP server name to connect.'),
+    server: zod.string().min(1).describe('The MCP server name to connect.'),
   },
   handler: async (request, response) => {
     const session = getCDPSession(
@@ -560,10 +551,7 @@ export const operaUnregisterMcpServer = definePageTool({
     readOnlyHint: false,
   },
   schema: {
-    server: zod
-      .string()
-      .min(1)
-      .describe('The MCP server name to unregister.'),
+    server: zod.string().min(1).describe('The MCP server name to unregister.'),
   },
   handler: async (request, response) => {
     const session = getCDPSession(
@@ -595,10 +583,7 @@ export const operaEnableMcpServer = definePageTool({
     readOnlyHint: false,
   },
   schema: {
-    server: zod
-      .string()
-      .min(1)
-      .describe('The MCP server name to enable.'),
+    server: zod.string().min(1).describe('The MCP server name to enable.'),
   },
   handler: async (request, response) => {
     const session = getCDPSession(
@@ -631,10 +616,7 @@ export const operaDisableMcpServer = definePageTool({
     readOnlyHint: false,
   },
   schema: {
-    server: zod
-      .string()
-      .min(1)
-      .describe('The MCP server name to disable.'),
+    server: zod.string().min(1).describe('The MCP server name to disable.'),
   },
   handler: async (request, response) => {
     const session = getCDPSession(
