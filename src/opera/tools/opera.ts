@@ -121,8 +121,10 @@ export const operaChat = definePageTool({
       ),
   },
   handler: async (request, response) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const session = getCDPSession(request.page.pptrPage as any);
+    // puppeteer's _client() is internal; cast to the shape getCDPSession needs
+    const session = getCDPSession(
+      request.page.pptrPage as unknown as {_client(): CDPSession},
+    );
     try {
       const payload: Record<string, unknown> = {
         action: 'chat',
@@ -157,8 +159,10 @@ export const operaDo = definePageTool({
       .describe('The action to perform, described in natural language.'),
   },
   handler: async (request, response) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const session = getCDPSession(request.page.pptrPage as any);
+    // puppeteer's _client() is internal; cast to the shape getCDPSession needs
+    const session = getCDPSession(
+      request.page.pptrPage as unknown as {_client(): CDPSession},
+    );
     try {
       const result = await dispatchWithStreamedResponse(
         session,
@@ -195,8 +199,10 @@ export const operaMake = definePageTool({
     prompt: zod.string().describe('Description of what to create or generate.'),
   },
   handler: async (request, response) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const session = getCDPSession(request.page.pptrPage as any);
+    // puppeteer's _client() is internal; cast to the shape getCDPSession needs
+    const session = getCDPSession(
+      request.page.pptrPage as unknown as {_client(): CDPSession},
+    );
     try {
       const result = await dispatchAction(session, {
         action: 'make',
@@ -231,8 +237,10 @@ export const operaResearch = definePageTool({
       ),
   },
   handler: async (request, response) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const session = getCDPSession(request.page.pptrPage as any);
+    // puppeteer's _client() is internal; cast to the shape getCDPSession needs
+    const session = getCDPSession(
+      request.page.pptrPage as unknown as {_client(): CDPSession},
+    );
     const payload: Record<string, unknown> = {
       action: 'research',
       prompt: request.params.prompt,
@@ -271,8 +279,10 @@ export const operaListModels = definePageTool({
   },
   schema: {},
   handler: async (request, response) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const session = getCDPSession(request.page.pptrPage as any);
+    // puppeteer's _client() is internal; cast to the shape getCDPSession needs
+    const session = getCDPSession(
+      request.page.pptrPage as unknown as {_client(): CDPSession},
+    );
     try {
       const result = await dispatchAction(session, {action: 'listModels'});
       response.appendResponseLine(result);
@@ -298,8 +308,10 @@ export const operaListMcpServers = definePageTool({
   },
   schema: {},
   handler: async (request, response) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const session = getCDPSession(request.page.pptrPage as any);
+    // puppeteer's _client() is internal; cast to the shape getCDPSession needs
+    const session = getCDPSession(
+      request.page.pptrPage as unknown as {_client(): CDPSession},
+    );
     try {
       const result = await dispatchAction(session, {
         action: 'listMcpServers',
@@ -333,8 +345,10 @@ export const operaListMcpTools = definePageTool({
       .describe('The MCP server name (from opera_list_mcp_servers).'),
   },
   handler: async (request, response) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const session = getCDPSession(request.page.pptrPage as any);
+    // puppeteer's _client() is internal; cast to the shape getCDPSession needs
+    const session = getCDPSession(
+      request.page.pptrPage as unknown as {_client(): CDPSession},
+    );
     try {
       const result = await dispatchAction(session, {
         action: 'listMcpTools',
@@ -378,8 +392,10 @@ export const operaCallMcpTool = definePageTool({
       .describe('Parameters to pass to the tool. Omit if the tool takes none.'),
   },
   handler: async (request, response) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const session = getCDPSession(request.page.pptrPage as any);
+    // puppeteer's _client() is internal; cast to the shape getCDPSession needs
+    const session = getCDPSession(
+      request.page.pptrPage as unknown as {_client(): CDPSession},
+    );
     try {
       const payload: Record<string, unknown> = {
         action: 'callMcpTool',
@@ -403,6 +419,237 @@ export const operaCallMcpTool = definePageTool({
       }
       response.appendResponseLine(
         `Opera.dispatchWithStreamedResponse(callMcpTool) failed with error: ${(e as Error).message}`,
+      );
+    }
+  },
+});
+
+export const operaRegisterMcpServer = definePageTool({
+  name: 'opera_register_mcp_server',
+  description:
+    'Register an MCP server in the browser. Does not connect or authenticate — ' +
+    'follow with opera_connect_mcp_server. Only available when connected to Opera Neon.',
+  blockedByDialog: false,
+  verifyFilesSchema: {},
+  annotations: {
+    category: ToolCategory.OPERA,
+    readOnlyHint: false,
+  },
+  schema: {
+    server: zod
+      .string()
+      .min(1)
+      .describe('The MCP server name to register.'),
+    url: zod
+      .string()
+      .min(1)
+      .describe('The HTTP URL of the MCP server.'),
+  },
+  handler: async (request, response) => {
+    // puppeteer's _client() is internal; cast to the shape getCDPSession needs
+    const session = getCDPSession(
+      request.page.pptrPage as unknown as {_client(): CDPSession},
+    );
+    try {
+      const result = await dispatchAction(session, {
+        action: 'registerMcpServer',
+        type: 'REGISTER_SERVER',
+        server: request.params.server,
+        transportInfo: {type: 'http', url: request.params.url},
+      });
+      response.appendResponseLine(result);
+    } catch (e) {
+      response.appendResponseLine(
+        `Opera.dispatchAction(registerMcpServer) failed with error: ${(e as Error).message}`,
+      );
+    }
+  },
+});
+
+export const operaConnectMcpServer = definePageTool({
+  name: 'opera_connect_mcp_server',
+  description:
+    'Connect to a registered MCP server. If the server requires OAuth, ' +
+    'the response includes requiresAuth: "needed" — follow with ' +
+    'opera_authenticate_mcp_server. Only available when connected to Opera Neon.',
+  blockedByDialog: false,
+  verifyFilesSchema: {},
+  annotations: {
+    category: ToolCategory.OPERA,
+    readOnlyHint: false,
+  },
+  schema: {
+    server: zod
+      .string()
+      .min(1)
+      .describe('The MCP server name to connect.'),
+  },
+  handler: async (request, response) => {
+    const session = getCDPSession(
+      request.page.pptrPage as unknown as {_client(): CDPSession},
+    );
+    try {
+      const result = await dispatchAction(session, {
+        action: 'connectMcpServer',
+        type: 'CONNECT_SERVER',
+        server: request.params.server,
+      });
+      response.appendResponseLine(result);
+    } catch (e) {
+      response.appendResponseLine(
+        `Opera.dispatchAction(connectMcpServer) failed with error: ${(e as Error).message}`,
+      );
+    }
+  },
+});
+
+export const operaAuthenticateMcpServer = definePageTool({
+  name: 'opera_authenticate_mcp_server',
+  description:
+    'Complete OAuth sign-in for an MCP server that requires authentication. ' +
+    'Opens a browser popup for the OAuth flow; requires a headed (visible) browser. ' +
+    'Only available when connected to Opera Neon.',
+  blockedByDialog: false,
+  verifyFilesSchema: {},
+  annotations: {
+    category: ToolCategory.OPERA,
+    readOnlyHint: false,
+  },
+  schema: {
+    server: zod
+      .string()
+      .min(1)
+      .describe('The MCP server name to authenticate.'),
+  },
+  handler: async (request, response) => {
+    const session = getCDPSession(
+      request.page.pptrPage as unknown as {_client(): CDPSession},
+    );
+    try {
+      const result = await dispatchWithStreamedResponse(
+        session,
+        {
+          action: 'authenticateMcpServer',
+          type: 'AUTHENTICATE_SERVER',
+          server: request.params.server,
+        },
+        chunk => response.sendLog(chunk),
+        request.signal,
+      );
+      response.appendResponseLine(result);
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') {
+        throw e;
+      }
+      response.appendResponseLine(
+        `Opera.dispatchWithStreamedResponse(authenticateMcpServer) failed with error: ${(e as Error).message}`,
+      );
+    }
+  },
+});
+
+export const operaUnregisterMcpServer = definePageTool({
+  name: 'opera_unregister_mcp_server',
+  description:
+    'Remove a registered MCP server and its stored auth tokens. ' +
+    'Only available when connected to Opera Neon.',
+  blockedByDialog: false,
+  verifyFilesSchema: {},
+  annotations: {
+    category: ToolCategory.OPERA,
+    readOnlyHint: false,
+  },
+  schema: {
+    server: zod
+      .string()
+      .min(1)
+      .describe('The MCP server name to unregister.'),
+  },
+  handler: async (request, response) => {
+    const session = getCDPSession(
+      request.page.pptrPage as unknown as {_client(): CDPSession},
+    );
+    try {
+      const result = await dispatchAction(session, {
+        action: 'unregisterMcpServer',
+        type: 'UNREGISTER_SERVER',
+        server: request.params.server,
+      });
+      response.appendResponseLine(result);
+    } catch (e) {
+      response.appendResponseLine(
+        `Opera.dispatchAction(unregisterMcpServer) failed with error: ${(e as Error).message}`,
+      );
+    }
+  },
+});
+
+export const operaEnableMcpServer = definePageTool({
+  name: 'opera_enable_mcp_server',
+  description:
+    'Enable a disabled MCP server. Only available when connected to Opera Neon.',
+  blockedByDialog: false,
+  verifyFilesSchema: {},
+  annotations: {
+    category: ToolCategory.OPERA,
+    readOnlyHint: false,
+  },
+  schema: {
+    server: zod
+      .string()
+      .min(1)
+      .describe('The MCP server name to enable.'),
+  },
+  handler: async (request, response) => {
+    const session = getCDPSession(
+      request.page.pptrPage as unknown as {_client(): CDPSession},
+    );
+    try {
+      const result = await dispatchAction(session, {
+        action: 'enableMcpServer',
+        type: 'ENABLE_SERVER',
+        server: request.params.server,
+      });
+      response.appendResponseLine(result);
+    } catch (e) {
+      response.appendResponseLine(
+        `Opera.dispatchAction(enableMcpServer) failed with error: ${(e as Error).message}`,
+      );
+    }
+  },
+});
+
+export const operaDisableMcpServer = definePageTool({
+  name: 'opera_disable_mcp_server',
+  description:
+    'Disable an MCP server without unregistering it. ' +
+    'Only available when connected to Opera Neon.',
+  blockedByDialog: false,
+  verifyFilesSchema: {},
+  annotations: {
+    category: ToolCategory.OPERA,
+    readOnlyHint: false,
+  },
+  schema: {
+    server: zod
+      .string()
+      .min(1)
+      .describe('The MCP server name to disable.'),
+  },
+  handler: async (request, response) => {
+    const session = getCDPSession(
+      request.page.pptrPage as unknown as {_client(): CDPSession},
+    );
+    try {
+      const result = await dispatchAction(session, {
+        action: 'disableMcpServer',
+        type: 'DISABLE_SERVER',
+        server: request.params.server,
+      });
+      response.appendResponseLine(result);
+    } catch (e) {
+      response.appendResponseLine(
+        `Opera.dispatchAction(disableMcpServer) failed with error: ${(e as Error).message}`,
       );
     }
   },
