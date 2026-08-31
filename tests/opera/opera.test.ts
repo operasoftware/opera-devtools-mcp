@@ -586,10 +586,7 @@ describe('opera tools', () => {
       await pending;
 
       assert.strictEqual(session.listenerCountFor('Opera.actionChunk'), 0);
-      assert.strictEqual(
-        session.listenerCountFor('Opera.actionCompleted'),
-        0,
-      );
+      assert.strictEqual(session.listenerCountFor('Opera.actionCompleted'), 0);
       assert.strictEqual(session.listenerCountFor('Opera.actionFailed'), 0);
     });
 
