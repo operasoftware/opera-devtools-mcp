@@ -1021,5 +1021,63 @@
         "argType": "number"
       }
     ]
+  },
+  {
+    "name": "opera_authenticate_mcp_server",
+    "args": [
+      {
+        "name": "server_length",
+        "argType": "number"
+      }
+    ]
+  },
+  {
+    "name": "opera_connect_mcp_server",
+    "args": [
+      {
+        "name": "server_length",
+        "argType": "number"
+      }
+    ]
+  },
+  {
+    "name": "opera_disable_mcp_server",
+    "args": [
+      {
+        "name": "server_length",
+        "argType": "number"
+      }
+    ]
+  },
+  {
+    "name": "opera_enable_mcp_server",
+    "args": [
+      {
+        "name": "server_length",
+        "argType": "number"
+      }
+    ]
+  },
+  {
+    "name": "opera_register_mcp_server",
+    "args": [
+      {
+        "name": "server_length",
+        "argType": "number"
+      },
+      {
+        "name": "url_length",
+        "argType": "number"
+      }
+    ]
+  },
+  {
+    "name": "opera_unregister_mcp_server",
+    "args": [
+      {
+        "name": "server_length",
+        "argType": "number"
+      }
+    ]
   }
 ]

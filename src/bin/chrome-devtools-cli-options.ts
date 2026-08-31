@@ -1004,6 +1004,19 @@ export const commands: Commands = {
       },
     },
   },
+  opera_authenticate_mcp_server: {
+    description:
+      'Complete OAuth sign-in for an MCP server that requires authentication. Opens a browser popup for the OAuth flow; requires a headed (visible) browser. Only available when connected to Opera Neon.',
+    category: 'Opera',
+    args: {
+      server: {
+        name: 'server',
+        type: 'string',
+        description: 'The MCP server name to authenticate.',
+        required: true,
+      },
+    },
+  },
   opera_call_mcp_tool: {
     description:
       'Execute a tool on a specific MCP server registered in the browser. Use opera_list_mcp_servers to discover available servers and tools. Only available when connected to Opera Neon.',
@@ -1050,6 +1063,32 @@ export const commands: Commands = {
       },
     },
   },
+  opera_connect_mcp_server: {
+    description:
+      'Connect to a registered MCP server. If the server requires OAuth, the response includes requiresAuth: "needed" — follow with opera_authenticate_mcp_server. Only available when connected to Opera Neon.',
+    category: 'Opera',
+    args: {
+      server: {
+        name: 'server',
+        type: 'string',
+        description: 'The MCP server name to connect.',
+        required: true,
+      },
+    },
+  },
+  opera_disable_mcp_server: {
+    description:
+      'Disable an MCP server without unregistering it. Only available when connected to Opera Neon.',
+    category: 'Opera',
+    args: {
+      server: {
+        name: 'server',
+        type: 'string',
+        description: 'The MCP server name to disable.',
+        required: true,
+      },
+    },
+  },
   opera_do: {
     description:
       "Instruct Opera's built-in AI to perform an action on the current page and return the result. Only available when connected to Opera Neon.",
@@ -1059,6 +1098,19 @@ export const commands: Commands = {
         name: 'prompt',
         type: 'string',
         description: 'The action to perform, described in natural language.',
+        required: true,
+      },
+    },
+  },
+  opera_enable_mcp_server: {
+    description:
+      'Enable a disabled MCP server. Only available when connected to Opera Neon.',
+    category: 'Opera',
+    args: {
+      server: {
+        name: 'server',
+        type: 'string',
+        description: 'The MCP server name to enable.',
         required: true,
       },
     },
@@ -1101,6 +1153,25 @@ export const commands: Commands = {
       },
     },
   },
+  opera_register_mcp_server: {
+    description:
+      'Register an MCP server in the browser. Does not connect or authenticate — follow with opera_connect_mcp_server. Only available when connected to Opera Neon.',
+    category: 'Opera',
+    args: {
+      server: {
+        name: 'server',
+        type: 'string',
+        description: 'The MCP server name to register.',
+        required: true,
+      },
+      url: {
+        name: 'url',
+        type: 'string',
+        description: 'The HTTP URL of the MCP server.',
+        required: true,
+      },
+    },
+  },
   opera_research: {
     description:
       "Ask Opera's built-in AI to research a topic and return a summary. Only available when connected to Opera Neon.",
@@ -1119,6 +1190,19 @@ export const commands: Commands = {
           'Depth of research. "local" uses only on-page context, "one-minute" performs a quick web search, "deep" performs a thorough multi-source search.',
         required: false,
         enum: ['local', 'one-minute', 'deep'],
+      },
+    },
+  },
+  opera_unregister_mcp_server: {
+    description:
+      'Remove a registered MCP server and its stored auth tokens. Only available when connected to Opera Neon.',
+    category: 'Opera',
+    args: {
+      server: {
+        name: 'server',
+        type: 'string',
+        description: 'The MCP server name to unregister.',
+        required: true,
       },
     },
   },

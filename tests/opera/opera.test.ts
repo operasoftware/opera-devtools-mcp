@@ -16,11 +16,17 @@ import type {McpPage} from '../../src/McpPage.js';
 import type {McpResponse} from '../../src/McpResponse.js';
 import {serviceWorkerRetryPolicy} from '../../src/opera/serviceWorkerRetry.js';
 import {
+  operaAuthenticateMcpServer,
   operaChat,
+  operaConnectMcpServer,
+  operaDisableMcpServer,
   operaDo,
+  operaEnableMcpServer,
   operaListModels,
   operaMake,
+  operaRegisterMcpServer,
   operaResearch,
+  operaUnregisterMcpServer,
 } from '../../src/opera/tools/opera.js';
 
 /**
@@ -406,6 +412,342 @@ describe('opera tools', () => {
     });
   });
 
+  describe('opera_register_mcp_server', () => {
+    it('dispatches a registerMcpServer action and returns the result', async () => {
+      const session = new FakeCDPSession().resolveWith({result: 'registered'});
+      const {response, lines} = makeResponse();
+
+      await operaRegisterMcpServer.handler(
+        makeRequest(session, {
+          server: 'my-server',
+          url: 'http://localhost:3000',
+        }),
+        response,
+        context,
+      );
+
+      assert.strictEqual(session.sent[0]?.method, 'Opera.dispatchAction');
+      assert.deepStrictEqual(session.payloadAt(0), {
+        action: 'registerMcpServer',
+        type: 'REGISTER_SERVER',
+        server: 'my-server',
+        transportInfo: {type: 'http', url: 'http://localhost:3000'},
+      });
+      assert.deepStrictEqual(lines, ['registered']);
+    });
+
+    it('reports dispatch failures without throwing', async () => {
+      const session = new FakeCDPSession().rejectWith(new Error('boom'));
+      const {response, lines} = makeResponse();
+
+      await operaRegisterMcpServer.handler(
+        makeRequest(session, {
+          server: 'my-server',
+          url: 'http://localhost:3000',
+        }),
+        response,
+        context,
+      );
+
+      assert.match(
+        lines[0]!,
+        /Opera\.dispatchAction\(registerMcpServer\) failed/,
+      );
+      assert.match(lines[0]!, /boom/);
+    });
+  });
+
+  describe('opera_connect_mcp_server', () => {
+    it('dispatches a connectMcpServer action and returns the result', async () => {
+      const session = new FakeCDPSession().resolveWith({result: 'connected'});
+      const {response, lines} = makeResponse();
+
+      await operaConnectMcpServer.handler(
+        makeRequest(session, {server: 'my-server'}),
+        response,
+        context,
+      );
+
+      assert.strictEqual(session.sent[0]?.method, 'Opera.dispatchAction');
+      assert.deepStrictEqual(session.payloadAt(0), {
+        action: 'connectMcpServer',
+        type: 'CONNECT_SERVER',
+        server: 'my-server',
+      });
+      assert.deepStrictEqual(lines, ['connected']);
+    });
+
+    it('reports dispatch failures without throwing', async () => {
+      const session = new FakeCDPSession().rejectWith(new Error('boom'));
+      const {response, lines} = makeResponse();
+
+      await operaConnectMcpServer.handler(
+        makeRequest(session, {server: 'my-server'}),
+        response,
+        context,
+      );
+
+      assert.match(
+        lines[0]!,
+        /Opera\.dispatchAction\(connectMcpServer\) failed/,
+      );
+      assert.match(lines[0]!, /boom/);
+    });
+  });
+
+  describe('opera_authenticate_mcp_server', () => {
+    it('streams chunks to sendLog and resolves with the completed result', async () => {
+      const session = new FakeCDPSession().resolveWith({correlationId: 'c1'});
+      const {response, lines, logs} = makeResponse();
+
+      const pending = operaAuthenticateMcpServer.handler(
+        makeRequest(session, {server: 'my-server'}),
+        response,
+        context,
+      );
+
+      await waitForStreamListeners(session);
+
+      session.emit('Opera.actionChunk', {
+        correlationId: 'c1',
+        chunk: 'oauth step',
+      });
+      session.emit('Opera.actionCompleted', {
+        correlationId: 'c1',
+        result: 'authenticated',
+      });
+
+      await pending;
+
+      assert.strictEqual(
+        session.sent[0]?.method,
+        'Opera.dispatchWithStreamedResponse',
+      );
+      assert.deepStrictEqual(session.payloadAt(0), {
+        action: 'authenticateMcpServer',
+        type: 'AUTHENTICATE_SERVER',
+        server: 'my-server',
+      });
+      assert.deepStrictEqual(logs, ['oauth step']);
+      assert.deepStrictEqual(lines, ['authenticated']);
+    });
+
+    it('ignores events for a different correlationId', async () => {
+      const session = new FakeCDPSession().resolveWith({correlationId: 'mine'});
+      const {response, lines, logs} = makeResponse();
+
+      const pending = operaAuthenticateMcpServer.handler(
+        makeRequest(session, {server: 'my-server'}),
+        response,
+        context,
+      );
+      await waitForStreamListeners(session);
+
+      session.emit('Opera.actionChunk', {
+        correlationId: 'theirs',
+        chunk: 'not mine',
+      });
+      session.emit('Opera.actionCompleted', {
+        correlationId: 'theirs',
+        result: 'not mine either',
+      });
+      session.emit('Opera.actionChunk', {
+        correlationId: 'mine',
+        chunk: 'mine',
+      });
+      session.emit('Opera.actionCompleted', {
+        correlationId: 'mine',
+        result: 'ok',
+      });
+
+      await pending;
+
+      assert.deepStrictEqual(logs, ['mine']);
+      assert.deepStrictEqual(lines, ['ok']);
+    });
+
+    it('removes its listeners once completed', async () => {
+      const session = new FakeCDPSession().resolveWith({correlationId: 'c1'});
+      const {response} = makeResponse();
+
+      const pending = operaAuthenticateMcpServer.handler(
+        makeRequest(session, {server: 'my-server'}),
+        response,
+        context,
+      );
+      await waitForStreamListeners(session);
+
+      assert.strictEqual(session.listenerCountFor('Opera.actionChunk'), 1);
+
+      session.emit('Opera.actionCompleted', {
+        correlationId: 'c1',
+        result: 'ok',
+      });
+      await pending;
+
+      assert.strictEqual(session.listenerCountFor('Opera.actionChunk'), 0);
+      assert.strictEqual(session.listenerCountFor('Opera.actionCompleted'), 0);
+      assert.strictEqual(session.listenerCountFor('Opera.actionFailed'), 0);
+    });
+
+    it('reports a streamed failure without throwing', async () => {
+      const session = new FakeCDPSession().resolveWith({correlationId: 'c1'});
+      const {response, lines} = makeResponse();
+
+      const pending = operaAuthenticateMcpServer.handler(
+        makeRequest(session, {server: 'my-server'}),
+        response,
+        context,
+      );
+      await waitForStreamListeners(session);
+
+      session.emit('Opera.actionFailed', {
+        correlationId: 'c1',
+        error: 'auth denied',
+      });
+      await pending;
+
+      assert.match(
+        lines[0]!,
+        /Opera\.dispatchWithStreamedResponse\(authenticateMcpServer\) failed/,
+      );
+      assert.match(lines[0]!, /auth denied/);
+    });
+
+    it('rethrows when the request is aborted', async () => {
+      const session = new FakeCDPSession().resolveWith({correlationId: 'c1'});
+      const {response} = makeResponse();
+      const controller = new AbortController();
+
+      const pending = operaAuthenticateMcpServer.handler(
+        makeRequest(session, {server: 'my-server'}, controller.signal),
+        response,
+        context,
+      );
+      await waitForStreamListeners(session);
+
+      controller.abort();
+
+      await assert.rejects(pending, {name: 'AbortError'});
+    });
+  });
+
+  describe('opera_unregister_mcp_server', () => {
+    it('dispatches an unregisterMcpServer action and returns the result', async () => {
+      const session = new FakeCDPSession().resolveWith({
+        result: 'unregistered',
+      });
+      const {response, lines} = makeResponse();
+
+      await operaUnregisterMcpServer.handler(
+        makeRequest(session, {server: 'my-server'}),
+        response,
+        context,
+      );
+
+      assert.strictEqual(session.sent[0]?.method, 'Opera.dispatchAction');
+      assert.deepStrictEqual(session.payloadAt(0), {
+        action: 'unregisterMcpServer',
+        type: 'UNREGISTER_SERVER',
+        server: 'my-server',
+      });
+      assert.deepStrictEqual(lines, ['unregistered']);
+    });
+
+    it('reports dispatch failures without throwing', async () => {
+      const session = new FakeCDPSession().rejectWith(new Error('boom'));
+      const {response, lines} = makeResponse();
+
+      await operaUnregisterMcpServer.handler(
+        makeRequest(session, {server: 'my-server'}),
+        response,
+        context,
+      );
+
+      assert.match(
+        lines[0]!,
+        /Opera\.dispatchAction\(unregisterMcpServer\) failed/,
+      );
+      assert.match(lines[0]!, /boom/);
+    });
+  });
+
+  describe('opera_enable_mcp_server', () => {
+    it('dispatches an enableMcpServer action and returns the result', async () => {
+      const session = new FakeCDPSession().resolveWith({result: 'enabled'});
+      const {response, lines} = makeResponse();
+
+      await operaEnableMcpServer.handler(
+        makeRequest(session, {server: 'my-server'}),
+        response,
+        context,
+      );
+
+      assert.strictEqual(session.sent[0]?.method, 'Opera.dispatchAction');
+      assert.deepStrictEqual(session.payloadAt(0), {
+        action: 'enableMcpServer',
+        type: 'ENABLE_SERVER',
+        server: 'my-server',
+      });
+      assert.deepStrictEqual(lines, ['enabled']);
+    });
+
+    it('reports dispatch failures without throwing', async () => {
+      const session = new FakeCDPSession().rejectWith(new Error('boom'));
+      const {response, lines} = makeResponse();
+
+      await operaEnableMcpServer.handler(
+        makeRequest(session, {server: 'my-server'}),
+        response,
+        context,
+      );
+
+      assert.match(
+        lines[0]!,
+        /Opera\.dispatchAction\(enableMcpServer\) failed/,
+      );
+      assert.match(lines[0]!, /boom/);
+    });
+  });
+
+  describe('opera_disable_mcp_server', () => {
+    it('dispatches a disableMcpServer action and returns the result', async () => {
+      const session = new FakeCDPSession().resolveWith({result: 'disabled'});
+      const {response, lines} = makeResponse();
+
+      await operaDisableMcpServer.handler(
+        makeRequest(session, {server: 'my-server'}),
+        response,
+        context,
+      );
+
+      assert.strictEqual(session.sent[0]?.method, 'Opera.dispatchAction');
+      assert.deepStrictEqual(session.payloadAt(0), {
+        action: 'disableMcpServer',
+        type: 'DISABLE_SERVER',
+        server: 'my-server',
+      });
+      assert.deepStrictEqual(lines, ['disabled']);
+    });
+
+    it('reports dispatch failures without throwing', async () => {
+      const session = new FakeCDPSession().rejectWith(new Error('boom'));
+      const {response, lines} = makeResponse();
+
+      await operaDisableMcpServer.handler(
+        makeRequest(session, {server: 'my-server'}),
+        response,
+        context,
+      );
+
+      assert.match(
+        lines[0]!,
+        /Opera\.dispatchAction\(disableMcpServer\) failed/,
+      );
+      assert.match(lines[0]!, /boom/);
+    });
+  });
+
   describe('service worker retry', () => {
     it('retries a failing dispatch and succeeds', async () => {
       const session = new FakeCDPSession()
@@ -460,6 +802,47 @@ describe('opera tools', () => {
 
       assert.strictEqual(session.sendCount, 2);
       assert.deepStrictEqual(lines, ['ok']);
+    });
+
+    it('retries a failing registerMcpServer dispatch and succeeds', async () => {
+      const session = new FakeCDPSession()
+        .failTimes(2, new Error('service worker not ready'))
+        .resolveWith({result: 'registered'});
+      const {response, lines} = makeResponse();
+
+      await operaRegisterMcpServer.handler(
+        makeRequest(session, {
+          server: 'my-server',
+          url: 'http://localhost:3000',
+        }),
+        response,
+        context,
+      );
+
+      assert.strictEqual(session.sendCount, 3);
+      assert.deepStrictEqual(lines, ['registered']);
+    });
+
+    it('retries the initial dispatch of authenticateMcpServer too', async () => {
+      const session = new FakeCDPSession()
+        .failTimes(1, new Error('service worker not ready'))
+        .resolveWith({correlationId: 'c1'});
+      const {response, lines} = makeResponse();
+
+      const pending = operaAuthenticateMcpServer.handler(
+        makeRequest(session, {server: 'my-server'}),
+        response,
+        context,
+      );
+      await waitForStreamListeners(session);
+      session.emit('Opera.actionCompleted', {
+        correlationId: 'c1',
+        result: 'authenticated',
+      });
+      await pending;
+
+      assert.strictEqual(session.sendCount, 2);
+      assert.deepStrictEqual(lines, ['authenticated']);
     });
   });
 });

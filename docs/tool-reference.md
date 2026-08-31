@@ -52,15 +52,21 @@
   - [`get_heapsnapshot_retainers`](#get_heapsnapshot_retainers)
   - [`get_heapsnapshot_retaining_paths`](#get_heapsnapshot_retaining_paths)
   - [`get_heapsnapshot_summary`](#get_heapsnapshot_summary)
-- **[Opera](#opera)** (8 tools)
+- **[Opera](#opera)** (14 tools)
+  - [`opera_authenticate_mcp_server`](#opera_authenticate_mcp_server)
   - [`opera_call_mcp_tool`](#opera_call_mcp_tool)
   - [`opera_chat`](#opera_chat)
+  - [`opera_connect_mcp_server`](#opera_connect_mcp_server)
+  - [`opera_disable_mcp_server`](#opera_disable_mcp_server)
   - [`opera_do`](#opera_do)
+  - [`opera_enable_mcp_server`](#opera_enable_mcp_server)
   - [`opera_list_mcp_servers`](#opera_list_mcp_servers)
   - [`opera_list_mcp_tools`](#opera_list_mcp_tools)
   - [`opera_list_models`](#opera_list_models)
   - [`opera_make`](#opera_make)
+  - [`opera_register_mcp_server`](#opera_register_mcp_server)
   - [`opera_research`](#opera_research)
+  - [`opera_unregister_mcp_server`](#opera_unregister_mcp_server)
 - **[Extensions](#extensions)** (5 tools)
   - [`install_extension`](#install_extension)
   - [`list_extensions`](#list_extensions)
@@ -611,6 +617,16 @@ in the DevTools Elements panel (if any).
 
 ## Opera
 
+### `opera_authenticate_mcp_server`
+
+**Description:** Complete OAuth sign-in for an MCP server that requires authentication. Opens a browser popup for the OAuth flow; requires a headed (visible) browser. Only available when connected to Opera Neon.
+
+**Parameters:**
+
+- **server** (string) **(required)**: The MCP server name to authenticate.
+
+---
+
 ### `opera_call_mcp_tool`
 
 **Description:** Execute a tool on a specific MCP server registered in the browser. Use [`opera_list_mcp_servers`](#opera_list_mcp_servers) to discover available servers and tools. Only available when connected to Opera Neon.
@@ -634,6 +650,26 @@ in the DevTools Elements panel (if any).
 
 ---
 
+### `opera_connect_mcp_server`
+
+**Description:** Connect to a registered MCP server. If the server requires OAuth, the response includes requiresAuth: "needed" — follow with [`opera_authenticate_mcp_server`](#opera_authenticate_mcp_server). Only available when connected to Opera Neon.
+
+**Parameters:**
+
+- **server** (string) **(required)**: The MCP server name to connect.
+
+---
+
+### `opera_disable_mcp_server`
+
+**Description:** Disable an MCP server without unregistering it. Only available when connected to Opera Neon.
+
+**Parameters:**
+
+- **server** (string) **(required)**: The MCP server name to disable.
+
+---
+
 ### `opera_do`
 
 **Description:** Instruct Opera's built-in AI to perform an action on the current page and return the result. Only available when connected to Opera Neon.
@@ -641,6 +677,16 @@ in the DevTools Elements panel (if any).
 **Parameters:**
 
 - **prompt** (string) **(required)**: The action to perform, described in natural language.
+
+---
+
+### `opera_enable_mcp_server`
+
+**Description:** Enable a disabled MCP server. Only available when connected to Opera Neon.
+
+**Parameters:**
+
+- **server** (string) **(required)**: The MCP server name to enable.
 
 ---
 
@@ -680,6 +726,17 @@ in the DevTools Elements panel (if any).
 
 ---
 
+### `opera_register_mcp_server`
+
+**Description:** Register an MCP server in the browser. Does not connect or authenticate — follow with [`opera_connect_mcp_server`](#opera_connect_mcp_server). Only available when connected to Opera Neon.
+
+**Parameters:**
+
+- **server** (string) **(required)**: The MCP server name to register.
+- **url** (string) **(required)**: The HTTP URL of the MCP server.
+
+---
+
 ### `opera_research`
 
 **Description:** Ask Opera's built-in AI to research a topic and return a summary. Only available when connected to Opera Neon.
@@ -688,6 +745,16 @@ in the DevTools Elements panel (if any).
 
 - **prompt** (string) **(required)**: The topic or question to research.
 - **researchType** (enum: "local", "one-minute", "deep") _(optional)_: Depth of research. "local" uses only on-page context, "one-minute" performs a quick web search, "deep" performs a thorough multi-source search.
+
+---
+
+### `opera_unregister_mcp_server`
+
+**Description:** Remove a registered MCP server and its stored auth tokens. Only available when connected to Opera Neon.
+
+**Parameters:**
+
+- **server** (string) **(required)**: The MCP server name to unregister.
 
 ---
 
