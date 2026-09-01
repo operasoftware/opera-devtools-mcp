@@ -1061,6 +1061,13 @@ export const commands: Commands = {
           'Model ID to use for the chat. Omit to use the browser default. Use opera_list_models to discover available IDs.',
         required: false,
       },
+      conversationId: {
+        name: 'conversationId',
+        type: 'string',
+        description:
+          'Conversation ID to continue an existing conversation. Omit to start a new conversation.',
+        required: false,
+      },
     },
   },
   opera_connect_mcp_server: {

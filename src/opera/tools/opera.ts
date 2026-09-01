@@ -119,6 +119,12 @@ export const operaChat = definePageTool({
       .describe(
         'Model ID to use for the chat. Omit to use the browser default. Use opera_list_models to discover available IDs.',
       ),
+    conversationId: zod
+      .string()
+      .optional()
+      .describe(
+        'Conversation ID to continue an existing conversation. Omit to start a new conversation.',
+      ),
   },
   handler: async (request, response) => {
     // puppeteer's _client() is internal; cast to the shape getCDPSession needs
@@ -132,6 +138,9 @@ export const operaChat = definePageTool({
       };
       if (request.params.model !== undefined) {
         payload['model'] = request.params.model;
+      }
+      if (request.params.conversationId !== undefined) {
+        payload['conversationId'] = request.params.conversationId;
       }
       const result = await dispatchAction(session, payload);
       response.appendResponseLine(result);
