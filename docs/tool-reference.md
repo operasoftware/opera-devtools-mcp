@@ -646,6 +646,7 @@ in the DevTools Elements panel (if any).
 **Parameters:**
 
 - **prompt** (string) **(required)**: The prompt to send to Opera AI.
+- **conversationId** (string) _(optional)_: Conversation ID to continue an existing conversation. Omit to start a new conversation.
 - **model** (string) _(optional)_: Model ID to use for the chat. Omit to use the browser default. Use [`opera_list_models`](#opera_list_models) to discover available IDs.
 
 ---

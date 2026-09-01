@@ -201,6 +201,38 @@ describe('opera tools', () => {
       assert.match(lines[0]!, /Opera\.dispatchAction\(chat\) failed/);
       assert.match(lines[0]!, /boom/);
     });
+
+    it('forwards the conversationId when one is given', async () => {
+      const session = new FakeCDPSession();
+      const {response} = makeResponse();
+
+      await operaChat.handler(
+        makeRequest(session, {
+          prompt: 'hi',
+          conversationId: 'conversation-123',
+        }),
+        response,
+        context,
+      );
+
+      assert.strictEqual(
+        session.payloadAt(0)['conversationId'],
+        'conversation-123',
+      );
+    });
+
+    it('omits the conversationId key when none is given', async () => {
+      const session = new FakeCDPSession();
+      const {response} = makeResponse();
+
+      await operaChat.handler(
+        makeRequest(session, {prompt: 'hi'}),
+        response,
+        context,
+      );
+
+      assert.ok(!('conversationId' in session.payloadAt(0)));
+    });
   });
 
   describe('opera_make', () => {
