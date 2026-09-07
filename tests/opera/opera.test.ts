@@ -252,6 +252,25 @@ describe('opera tools', () => {
       });
       assert.deepStrictEqual(lines, ['made it']);
     });
+
+    it('forwards the conversationId when one is given', async () => {
+      const session = new FakeCDPSession().resolveWith({result: 'made it'});
+      const {response} = makeResponse();
+
+      await operaMake.handler(
+        makeRequest(session, {
+          prompt: 'a poem',
+          conversationId: 'conversation-123',
+        }),
+        response,
+        context,
+      );
+
+      assert.strictEqual(
+        session.payloadAt(0)['conversationId'],
+        'conversation-123',
+      );
+    });
   });
 
   describe('opera_list_models', () => {

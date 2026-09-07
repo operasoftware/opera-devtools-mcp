@@ -691,6 +691,10 @@
       {
         "name": "prompt_length",
         "argType": "number"
+      },
+      {
+        "name": "conversation_id_length",
+        "argType": "number"
       }
     ]
   },

@@ -1158,6 +1158,13 @@ export const commands: Commands = {
         description: 'Description of what to create or generate.',
         required: true,
       },
+      conversationId: {
+        name: 'conversationId',
+        type: 'string',
+        description:
+          'Conversation ID to continue an existing conversation. Omit to start a new conversation.',
+        required: false,
+      },
     },
   },
   opera_register_mcp_server: {

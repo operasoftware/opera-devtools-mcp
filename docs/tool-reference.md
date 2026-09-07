@@ -724,6 +724,7 @@ in the DevTools Elements panel (if any).
 **Parameters:**
 
 - **prompt** (string) **(required)**: Description of what to create or generate.
+- **conversationId** (string) _(optional)_: Conversation ID to continue an existing conversation. Omit to start a new conversation.
 
 ---
 

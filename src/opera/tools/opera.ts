@@ -206,6 +206,12 @@ export const operaMake = definePageTool({
   },
   schema: {
     prompt: zod.string().describe('Description of what to create or generate.'),
+    conversationId: zod
+      .string()
+      .optional()
+      .describe(
+        'Conversation ID to continue an existing conversation. Omit to start a new conversation.',
+      ),
   },
   handler: async (request, response) => {
     // puppeteer's _client() is internal; cast to the shape getCDPSession needs
@@ -213,10 +219,14 @@ export const operaMake = definePageTool({
       request.page.pptrPage as unknown as {_client(): CDPSession},
     );
     try {
-      const result = await dispatchAction(session, {
+      const payload: Record<string, unknown> = {
         action: 'make',
         prompt: request.params.prompt,
-      });
+      };
+      if (request.params.conversationId !== undefined) {
+        payload['conversationId'] = request.params.conversationId;
+      }
+      const result = await dispatchAction(session, payload);
       response.appendResponseLine(result);
     } catch (e) {
       response.appendResponseLine(
