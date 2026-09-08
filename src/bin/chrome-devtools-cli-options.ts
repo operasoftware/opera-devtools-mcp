@@ -1068,6 +1068,13 @@ export const commands: Commands = {
           'Conversation ID to continue an existing conversation. Omit to start a new conversation.',
         required: false,
       },
+      openFullTabView: {
+        name: 'openFullTabView',
+        type: 'boolean',
+        description:
+          'When true, activate the created chat tab so the user sees it immediately. Default false (tab created in the background). Only meaningful for headed sessions.',
+        required: false,
+      },
     },
   },
   opera_connect_mcp_server: {
@@ -1106,6 +1113,13 @@ export const commands: Commands = {
         type: 'string',
         description: 'The action to perform, described in natural language.',
         required: true,
+      },
+      openFullTabView: {
+        name: 'openFullTabView',
+        type: 'boolean',
+        description:
+          'When true, activate the created do tab so the user sees it immediately. Default false (tab created in the background). Only meaningful for headed sessions.',
+        required: false,
       },
     },
   },
@@ -1165,6 +1179,13 @@ export const commands: Commands = {
           'Conversation ID to continue an existing conversation. Omit to start a new conversation.',
         required: false,
       },
+      openFullTabView: {
+        name: 'openFullTabView',
+        type: 'boolean',
+        description:
+          'When true, activate the created make tab so the user sees it immediately. Default false (tab created in the background). Only meaningful for headed sessions.',
+        required: false,
+      },
     },
   },
   opera_register_mcp_server: {
@@ -1204,6 +1225,13 @@ export const commands: Commands = {
           'Depth of research. "local" uses only on-page context, "one-minute" performs a quick web search, "deep" performs a thorough multi-source search.',
         required: false,
         enum: ['local', 'one-minute', 'deep'],
+      },
+      openFullTabView: {
+        name: 'openFullTabView',
+        type: 'boolean',
+        description:
+          'When true, activate the created research tab so the user sees it immediately. Default false (tab created in the background). Only meaningful for headed sessions.',
+        required: false,
       },
     },
   },

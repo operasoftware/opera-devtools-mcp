@@ -673,6 +673,10 @@
       {
         "name": "conversation_id_length",
         "argType": "number"
+      },
+      {
+        "name": "open_full_tab_view",
+        "argType": "boolean"
       }
     ]
   },
@@ -682,6 +686,10 @@
       {
         "name": "prompt_length",
         "argType": "number"
+      },
+      {
+        "name": "open_full_tab_view",
+        "argType": "boolean"
       }
     ]
   },
@@ -695,6 +703,10 @@
       {
         "name": "conversation_id_length",
         "argType": "number"
+      },
+      {
+        "name": "open_full_tab_view",
+        "argType": "boolean"
       }
     ]
   },
@@ -708,6 +720,10 @@
       {
         "name": "research_type",
         "argType": "string"
+      },
+      {
+        "name": "open_full_tab_view",
+        "argType": "boolean"
       }
     ]
   },
