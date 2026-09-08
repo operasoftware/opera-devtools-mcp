@@ -321,6 +321,32 @@ describe('opera tools', () => {
 
       assert.strictEqual(session.payloadAt(0)['openFullTabView'], true);
     });
+
+    it('omits openFullTabView for opera_make when not set', async () => {
+      const session = new FakeCDPSession().resolveWith({result: 'made it'});
+      const {response} = makeResponse();
+
+      await operaMake.handler(
+        makeRequest(session, {prompt: 'a poem'}),
+        response,
+        context,
+      );
+
+      assert.ok(!('openFullTabView' in session.payloadAt(0)));
+    });
+
+    it('omits openFullTabView for opera_make when false', async () => {
+      const session = new FakeCDPSession().resolveWith({result: 'made it'});
+      const {response} = makeResponse();
+
+      await operaMake.handler(
+        makeRequest(session, {prompt: 'a poem', openFullTabView: false}),
+        response,
+        context,
+      );
+
+      assert.ok(!('openFullTabView' in session.payloadAt(0)));
+    });
   });
 
   describe('opera_list_models', () => {
@@ -566,6 +592,44 @@ describe('opera tools', () => {
       await pending;
 
       assert.strictEqual(session.payloadAt(0)['openFullTabView'], true);
+    });
+
+    it('omits openFullTabView for opera_research when not set', async () => {
+      const session = new FakeCDPSession().resolveWith({correlationId: 'c1'});
+      const {response} = makeResponse();
+
+      const pending = operaResearch.handler(
+        makeRequest(session, {prompt: 'quantum'}),
+        response,
+        context,
+      );
+      await waitForStreamListeners(session);
+      session.emit('Opera.actionCompleted', {
+        correlationId: 'c1',
+        result: 'summary',
+      });
+      await pending;
+
+      assert.ok(!('openFullTabView' in session.payloadAt(0)));
+    });
+
+    it('omits openFullTabView for opera_research when false', async () => {
+      const session = new FakeCDPSession().resolveWith({correlationId: 'c1'});
+      const {response} = makeResponse();
+
+      const pending = operaResearch.handler(
+        makeRequest(session, {prompt: 'quantum', openFullTabView: false}),
+        response,
+        context,
+      );
+      await waitForStreamListeners(session);
+      session.emit('Opera.actionCompleted', {
+        correlationId: 'c1',
+        result: 'summary',
+      });
+      await pending;
+
+      assert.ok(!('openFullTabView' in session.payloadAt(0)));
     });
   });
 
