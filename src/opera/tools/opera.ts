@@ -125,6 +125,12 @@ export const operaChat = definePageTool({
       .describe(
         'Conversation ID to continue an existing conversation. Omit to start a new conversation.',
       ),
+    openFullTabView: zod
+      .boolean()
+      .optional()
+      .describe(
+        'When true, activate the created chat tab so the user sees it immediately. Default false (tab created in the background). Only meaningful for headed sessions.',
+      ),
   },
   handler: async (request, response) => {
     // puppeteer's _client() is internal; cast to the shape getCDPSession needs
@@ -141,6 +147,9 @@ export const operaChat = definePageTool({
       }
       if (request.params.conversationId !== undefined) {
         payload['conversationId'] = request.params.conversationId;
+      }
+      if (request.params.openFullTabView === true) {
+        payload['openFullTabView'] = true;
       }
       const result = await dispatchAction(session, payload);
       response.appendResponseLine(result);
@@ -166,6 +175,12 @@ export const operaDo = definePageTool({
     prompt: zod
       .string()
       .describe('The action to perform, described in natural language.'),
+    openFullTabView: zod
+      .boolean()
+      .optional()
+      .describe(
+        'When true, activate the created do tab so the user sees it immediately. Default false (tab created in the background). Only meaningful for headed sessions.',
+      ),
   },
   handler: async (request, response) => {
     // puppeteer's _client() is internal; cast to the shape getCDPSession needs
@@ -173,12 +188,16 @@ export const operaDo = definePageTool({
       request.page.pptrPage as unknown as {_client(): CDPSession},
     );
     try {
+      const payload: Record<string, unknown> = {
+        action: 'do',
+        prompt: request.params.prompt,
+      };
+      if (request.params.openFullTabView === true) {
+        payload['openFullTabView'] = true;
+      }
       const result = await dispatchWithStreamedResponse(
         session,
-        {
-          action: 'do',
-          prompt: request.params.prompt,
-        },
+        payload,
         chunk => response.sendLog(chunk),
         request.signal,
       );
@@ -212,6 +231,12 @@ export const operaMake = definePageTool({
       .describe(
         'Conversation ID to continue an existing conversation. Omit to start a new conversation.',
       ),
+    openFullTabView: zod
+      .boolean()
+      .optional()
+      .describe(
+        'When true, activate the created make tab so the user sees it immediately. Default false (tab created in the background). Only meaningful for headed sessions.',
+      ),
   },
   handler: async (request, response) => {
     // puppeteer's _client() is internal; cast to the shape getCDPSession needs
@@ -225,6 +250,9 @@ export const operaMake = definePageTool({
       };
       if (request.params.conversationId !== undefined) {
         payload['conversationId'] = request.params.conversationId;
+      }
+      if (request.params.openFullTabView === true) {
+        payload['openFullTabView'] = true;
       }
       const result = await dispatchAction(session, payload);
       response.appendResponseLine(result);
@@ -254,6 +282,12 @@ export const operaResearch = definePageTool({
       .describe(
         'Depth of research. "local" uses only on-page context, "one-minute" performs a quick web search, "deep" performs a thorough multi-source search.',
       ),
+    openFullTabView: zod
+      .boolean()
+      .optional()
+      .describe(
+        'When true, activate the created research tab so the user sees it immediately. Default false (tab created in the background). Only meaningful for headed sessions.',
+      ),
   },
   handler: async (request, response) => {
     // puppeteer's _client() is internal; cast to the shape getCDPSession needs
@@ -266,6 +300,9 @@ export const operaResearch = definePageTool({
     };
     if (request.params.researchType !== undefined) {
       payload['researchType'] = request.params.researchType;
+    }
+    if (request.params.openFullTabView === true) {
+      payload['openFullTabView'] = true;
     }
     try {
       const result = await dispatchWithStreamedResponse(
