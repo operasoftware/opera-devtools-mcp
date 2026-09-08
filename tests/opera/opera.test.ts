@@ -233,6 +233,44 @@ describe('opera tools', () => {
 
       assert.ok(!('conversationId' in session.payloadAt(0)));
     });
+    it('forwards openFullTabView when true', async () => {
+      const session = new FakeCDPSession();
+      const {response} = makeResponse();
+
+      await operaChat.handler(
+        makeRequest(session, {prompt: 'hi', openFullTabView: true}),
+        response,
+        context,
+      );
+
+      assert.strictEqual(session.payloadAt(0)['openFullTabView'], true);
+    });
+
+    it('omits openFullTabView when not set', async () => {
+      const session = new FakeCDPSession();
+      const {response} = makeResponse();
+
+      await operaChat.handler(
+        makeRequest(session, {prompt: 'hi'}),
+        response,
+        context,
+      );
+
+      assert.ok(!('openFullTabView' in session.payloadAt(0)));
+    });
+
+    it('omits openFullTabView when false', async () => {
+      const session = new FakeCDPSession();
+      const {response} = makeResponse();
+
+      await operaChat.handler(
+        makeRequest(session, {prompt: 'hi', openFullTabView: false}),
+        response,
+        context,
+      );
+
+      assert.ok(!('openFullTabView' in session.payloadAt(0)));
+    });
   });
 
   describe('opera_make', () => {
@@ -270,6 +308,18 @@ describe('opera tools', () => {
         session.payloadAt(0)['conversationId'],
         'conversation-123',
       );
+    });
+    it('forwards openFullTabView when true', async () => {
+      const session = new FakeCDPSession().resolveWith({result: 'made it'});
+      const {response} = makeResponse();
+
+      await operaMake.handler(
+        makeRequest(session, {prompt: 'a poem', openFullTabView: true}),
+        response,
+        context,
+      );
+
+      assert.strictEqual(session.payloadAt(0)['openFullTabView'], true);
     });
   });
 
@@ -460,6 +510,62 @@ describe('opera tools', () => {
       await pending;
 
       assert.ok(!('researchType' in session.payloadAt(0)));
+    });
+    it('forwards openFullTabView when true for opera_do', async () => {
+      const session = new FakeCDPSession().resolveWith({correlationId: 'c1'});
+      const {response} = makeResponse();
+
+      const pending = operaDo.handler(
+        makeRequest(session, {prompt: 'go', openFullTabView: true}),
+        response,
+        context,
+      );
+      await waitForStreamListeners(session);
+      session.emit('Opera.actionCompleted', {
+        correlationId: 'c1',
+        result: 'done',
+      });
+      await pending;
+
+      assert.strictEqual(session.payloadAt(0)['openFullTabView'], true);
+    });
+
+    it('omits openFullTabView for opera_do when not set', async () => {
+      const session = new FakeCDPSession().resolveWith({correlationId: 'c1'});
+      const {response} = makeResponse();
+
+      const pending = operaDo.handler(
+        makeRequest(session, {prompt: 'go'}),
+        response,
+        context,
+      );
+      await waitForStreamListeners(session);
+      session.emit('Opera.actionCompleted', {
+        correlationId: 'c1',
+        result: 'done',
+      });
+      await pending;
+
+      assert.ok(!('openFullTabView' in session.payloadAt(0)));
+    });
+
+    it('forwards openFullTabView when true for opera_research', async () => {
+      const session = new FakeCDPSession().resolveWith({correlationId: 'c1'});
+      const {response} = makeResponse();
+
+      const pending = operaResearch.handler(
+        makeRequest(session, {prompt: 'quantum', openFullTabView: true}),
+        response,
+        context,
+      );
+      await waitForStreamListeners(session);
+      session.emit('Opera.actionCompleted', {
+        correlationId: 'c1',
+        result: 'summary',
+      });
+      await pending;
+
+      assert.strictEqual(session.payloadAt(0)['openFullTabView'], true);
     });
   });
 

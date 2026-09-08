@@ -648,6 +648,7 @@ in the DevTools Elements panel (if any).
 - **prompt** (string) **(required)**: The prompt to send to Opera AI.
 - **conversationId** (string) _(optional)_: Conversation ID to continue an existing conversation. Omit to start a new conversation.
 - **model** (string) _(optional)_: Model ID to use for the chat. Omit to use the browser default. Use [`opera_list_models`](#opera_list_models) to discover available IDs.
+- **openFullTabView** (boolean) _(optional)_: When true, activate the created chat tab so the user sees it immediately. Default false (tab created in the background). Only meaningful for headed sessions.
 
 ---
 
@@ -678,6 +679,7 @@ in the DevTools Elements panel (if any).
 **Parameters:**
 
 - **prompt** (string) **(required)**: The action to perform, described in natural language.
+- **openFullTabView** (boolean) _(optional)_: When true, activate the created do tab so the user sees it immediately. Default false (tab created in the background). Only meaningful for headed sessions.
 
 ---
 
@@ -725,6 +727,7 @@ in the DevTools Elements panel (if any).
 
 - **prompt** (string) **(required)**: Description of what to create or generate.
 - **conversationId** (string) _(optional)_: Conversation ID to continue an existing conversation. Omit to start a new conversation.
+- **openFullTabView** (boolean) _(optional)_: When true, activate the created make tab so the user sees it immediately. Default false (tab created in the background). Only meaningful for headed sessions.
 
 ---
 
@@ -746,6 +749,7 @@ in the DevTools Elements panel (if any).
 **Parameters:**
 
 - **prompt** (string) **(required)**: The topic or question to research.
+- **openFullTabView** (boolean) _(optional)_: When true, activate the created research tab so the user sees it immediately. Default false (tab created in the background). Only meaningful for headed sessions.
 - **researchType** (enum: "local", "one-minute", "deep") _(optional)_: Depth of research. "local" uses only on-page context, "one-minute" performs a quick web search, "deep" performs a thorough multi-source search.
 
 ---
