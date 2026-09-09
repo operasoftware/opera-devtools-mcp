@@ -22,6 +22,7 @@ export {type ShapeOutput} from '@modelcontextprotocol/sdk/server/zod-compat.js';
 export {StdioServerTransport} from '@modelcontextprotocol/sdk/server/stdio.js';
 export {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 export {Client} from '@modelcontextprotocol/sdk/client/index.js';
+export type {Transport} from '@modelcontextprotocol/sdk/shared/transport.js';
 export {
   type CallToolResult,
   SetLevelRequestSchema,
@@ -39,11 +40,12 @@ export {
   PredefinedNetworkConditions,
   KnownDevices,
   CDPSessionEvent,
+  ScreenRecorder,
 } from 'puppeteer-core';
 export {default as puppeteer} from 'puppeteer-core';
 export type * from 'puppeteer-core';
 export {PipeTransport} from 'puppeteer-core/internal/node/PipeTransport.js';
-export type {CdpPage} from 'puppeteer-core/internal/cdp/Page.js';
+export {CdpPage} from 'puppeteer-core/internal/cdp/Page.js';
 export type {CdpWebWorker} from 'puppeteer-core/internal/cdp/WebWorker.js';
 export type {Realm} from 'puppeteer-core/internal/api/Realm.js';
 export type {JSONSchema7, JSONSchema7Definition} from 'json-schema';

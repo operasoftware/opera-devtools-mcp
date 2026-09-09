@@ -5,4 +5,4 @@
  */
 
 // Compatibility shim. Prefer importing the canonical path directly.
-export * from './chrome-devtools-mcp-cli-options.js';
+export * from '../config/mcp-options.js';

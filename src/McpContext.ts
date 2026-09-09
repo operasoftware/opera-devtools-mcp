@@ -17,6 +17,7 @@ import type {
   HeapSnapshotDetailedClassDiff,
   DuplicateStringGroup,
   HeapEdgesQueryOptions,
+  HeapQueryOptions,
 } from './processors/HeapSnapshotManager.js';
 import {McpPage} from './McpPage.js';
 import {type UncaughtError} from './collectors/PageCollector.js';
@@ -49,6 +50,7 @@ import type {TraceResult} from './processors/PerformanceTrace.js';
 import type {Logger} from './types.js';
 import type {ExtensionServiceWorker} from './types.js';
 import {getTempFilePath, resolveCanonicalPath} from './utils/files.js';
+import {isAllowedUrl} from './utils/url.js';
 interface McpContextOptions {
   // Whether the DevTools windows are exposed as pages for debugging of DevTools.
   experimentalDevToolsDebugging: boolean;
@@ -56,6 +58,8 @@ interface McpContextOptions {
   experimentalIncludeAllPages?: boolean;
   // Whether CrUX data should be fetched.
   performanceCrux: boolean;
+  // Whether source maps are enabled in DevTools.
+  sourceMaps?: boolean;
   // The allow list of URL patterns to allow loading resources.
   allowList?: string[];
   // The block list of URL patterns to block loading resources.
@@ -69,6 +73,8 @@ interface McpContextOptions {
   reconnected?: boolean;
   // Custom navigation timeout in milliseconds to override default.
   navigationTimeout?: number;
+  // Whether extension tools and targets are enabled.
+  categoryExtensions?: boolean;
 }
 
 // Page ids are handed out from a process-wide counter so they stay unique
@@ -163,6 +169,14 @@ export class McpContext implements Context {
 
   #onTargetCreated = async (target: Target) => {
     try {
+      const url = target.url();
+      if (
+        !isAllowedUrl(url, {
+          categoryExtensions: this.#options.categoryExtensions,
+        })
+      ) {
+        return;
+      }
       const page = await target.page();
       if (!page) {
         return;
@@ -225,21 +239,18 @@ export class McpContext implements Context {
     this.#roots = roots;
   }
 
-  async validatePath(filePath?: string): Promise<void> {
+  /**
+   * Validates that the filePath is allowed according to the roots configuration.
+   * Tolerates if parts of the filePath do not exist yet but the file access to
+   * the resolved should only be allowed without following symlinks.
+   */
+  async validatePath(filePath: string): Promise<string>;
+  async validatePath(filePath?: undefined): Promise<undefined>;
+  async validatePath(filePath?: string): Promise<string | undefined>;
+  async validatePath(filePath?: string): Promise<string | undefined> {
     if (filePath === undefined) {
-      return;
+      return undefined;
     }
-    // If the client never negotiated roots and the operator has explicitly
-    // opted into unrestricted access via --allow-unrestricted-paths, restore
-    // the previous permissive behavior and skip validation.
-    if (this.#roots === undefined && this.#allowUnrestrictedPaths) {
-      return;
-    }
-    // roots() always returns at least the temp directory, even if the
-    // connecting client never negotiated the optional `roots` capability.
-    // Path validation must not be skipped just because no workspace roots
-    // were configured.
-    const roots = this.roots();
 
     let canonicalPath: string;
 
@@ -254,6 +265,20 @@ export class McpContext implements Context {
         `Access denied: Cannot resolve base path for ${filePath}.`,
       );
     }
+
+    // If the client never negotiated roots and the operator has explicitly
+    // opted into unrestricted access via --allow-unrestricted-paths, restore
+    // the previous permissive behavior and skip validation.
+    if (this.#roots === undefined && this.#allowUnrestrictedPaths) {
+      // Canonical path might not exist yet so we fallback to
+      // path.resolve(filePath). Consumers should not follow symlinks.
+      return canonicalPath || path.resolve(filePath);
+    }
+    // roots() always returns at least the temp directory, even if the
+    // connecting client never negotiated the optional `roots` capability.
+    // Path validation must not be skipped just because no workspace roots
+    // were configured.
+    const roots = this.roots();
 
     let allowed = false;
     const resolvedRoots = await Promise.allSettled(
@@ -293,19 +318,20 @@ export class McpContext implements Context {
         `Access denied: path ${filePath} (canonical: ${canonicalPath}) is not within any of the configured workspace roots.`,
       );
     }
+
+    return canonicalPath || path.resolve(filePath);
   }
 
   async ensureExtension<Extension extends `.${string}`>(
     filePath: string,
     extension: Extension,
   ): Promise<`${string}${Extension}`> {
-    const resolvedPath = path.resolve(filePath);
-    const currentExtension = path.extname(resolvedPath);
-    const outputPath: `${string}${Extension}` = `${resolvedPath.slice(
+    const resolved = await this.validatePath(filePath);
+    const currentExtension = path.extname(resolved);
+    const outputPath: `${string}${Extension}` = `${resolved.slice(
       0,
-      resolvedPath.length - currentExtension.length,
+      resolved.length - currentExtension.length,
     )}${extension}`;
-    await this.validatePath(outputPath);
     return outputPath;
   }
 
@@ -320,7 +346,7 @@ export class McpContext implements Context {
         ctx = await this.browser.createBrowserContext();
         this.#isolatedContexts.set(isolatedContextName, ctx);
       }
-      page = await ctx.newPage();
+      page = await ctx.newPage({background});
     } else {
       page = await this.browser.newPage({background});
     }
@@ -398,6 +424,21 @@ export class McpContext implements Context {
       );
     }
     return page;
+  }
+
+  getSelectedMcpPageUrl(page?: McpPage): string | undefined {
+    let targetPage = page;
+    if (!targetPage) {
+      try {
+        targetPage = this.getSelectedMcpPage();
+      } catch {
+        return undefined;
+      }
+    }
+    if (targetPage?.pptrPage?.isClosed() === false) {
+      return targetPage.pptrPage.url();
+    }
+    return undefined;
   }
 
   async getDevToolsData(page?: McpPage): Promise<DevToolsData | undefined> {
@@ -528,6 +569,7 @@ export class McpContext implements Context {
           page.browserContext(),
         ),
         navigationTimeout: this.#options.navigationTimeout,
+        sourceMaps: this.#options.sourceMaps,
       });
       this.#mcpPages.set(page, mcpPage);
       await mcpPage.init();
@@ -576,36 +618,47 @@ export class McpContext implements Context {
     const allPages = (
       await this.browser.pages(this.#options.experimentalIncludeAllPages)
     ).filter(page => {
-      return (
-        this.#options.experimentalDevToolsDebugging ||
-        !page.url().startsWith('devtools://')
-      );
+      if (
+        !this.#options.experimentalDevToolsDebugging &&
+        page.url().startsWith('devtools://')
+      ) {
+        return false;
+      }
+      return isAllowedUrl(page.url(), {
+        categoryExtensions: this.#options.categoryExtensions,
+      });
     });
 
-    const allTargets = this.browser.targets();
-    const extensionTargets = allTargets.filter(target => {
-      return (
-        target.url().startsWith('chrome-extension://') &&
-        target.type() === 'page'
-      );
-    });
+    if (this.#options.categoryExtensions) {
+      const allTargets = this.browser.targets();
+      const extensionTargets = allTargets.filter(target => {
+        return (
+          target.url().startsWith('chrome-extension://') &&
+          target.type() === 'page'
+        );
+      });
 
-    await Promise.allSettled(
-      extensionTargets.map(async target => {
-        try {
-          let page = await target.page();
-          if (!page) {
-            page = await target.asPage();
+      await Promise.allSettled(
+        extensionTargets.map(async target => {
+          try {
+            let page = await target.page();
+            if (!page) {
+              page = await target.asPage();
+            }
+            this.#extensionPages.set(target, page);
+            if (
+              page &&
+              isAllowedUrl(page.url(), {categoryExtensions: true}) &&
+              !allPages.includes(page)
+            ) {
+              allPages.push(page);
+            }
+          } catch (e) {
+            this.logger?.('Failed to get page for extension target', e);
           }
-          this.#extensionPages.set(target, page);
-          if (page && !allPages.includes(page)) {
-            allPages.push(page);
-          }
-        } catch (e) {
-          this.logger?.('Failed to get page for extension target', e);
-        }
-      }),
-    );
+        }),
+      );
+    }
 
     return allPages;
   }
@@ -624,17 +677,17 @@ export class McpContext implements Context {
     filepath: string,
     data: Uint8Array<ArrayBufferLike>,
   ): Promise<void> {
-    await this.validatePath(filepath);
+    const resolved = await this.validatePath(filepath);
 
     try {
-      await fs.mkdir(path.dirname(filepath), {recursive: true});
+      await fs.mkdir(path.dirname(resolved), {recursive: true});
       // Open the file with flags to:
       // - O_WRONLY: Write-only
       // - O_CREAT: Create if it doesn't exist
       // - O_TRUNC: Truncate to zero length if it exists
       // - O_NOFOLLOW: DO NOT follow symlinks.
       // - 0o600: Permissions: read/write for owner, no permissions for others.
-      await fs.writeFile(filepath, data, {
+      await fs.writeFile(resolved, data, {
         flag:
           fs.constants.O_WRONLY |
           fs.constants.O_CREAT |
@@ -736,6 +789,13 @@ export class McpContext implements Context {
     filePath: string,
   ): Promise<DuplicateStringGroup[]> {
     return await this.#heapSnapshotManager.getDuplicateStrings(filePath);
+  }
+
+  async queryHeapSnapshotObjects(
+    filePath: string,
+    options: HeapQueryOptions,
+  ): Promise<DevTools.HeapSnapshotModel.HeapSnapshotModel.ItemsRange> {
+    return await this.#heapSnapshotManager.queryObjects(filePath, options);
   }
 
   async getHeapSnapshotStats(
@@ -866,8 +926,8 @@ export class McpContext implements Context {
       }
 
       case 'file:': {
-        await this.validatePath(fileURLToPath(url));
-        return await fs.readFile(url, 'utf-8');
+        const resolved = await this.validatePath(fileURLToPath(url));
+        return await fs.readFile(resolved, 'utf-8');
       }
 
       default:

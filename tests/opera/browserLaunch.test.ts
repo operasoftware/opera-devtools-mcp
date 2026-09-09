@@ -8,7 +8,7 @@
 import assert from 'node:assert';
 import {describe, it} from 'node:test';
 
-import type {parseArguments} from '../../src/bin/chrome-devtools-mcp-cli-options.js';
+import type {parseArguments} from '../../src/config/mcp-options.js';
 import {buildLaunchOptions} from '../../src/opera/browserLaunch.js';
 
 type ServerArgs = ReturnType<typeof parseArguments>;

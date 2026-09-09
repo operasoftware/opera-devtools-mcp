@@ -8,8 +8,15 @@
 
 import assert from 'node:assert';
 import {describe, it} from 'node:test';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
-import {parser} from '../src/bin/chrome-devtools-mcp-cli-options.js';
+import {
+  DEFAULT_FILESYSTEM_ROOT,
+  mcpOptions,
+  parser,
+} from '../src/config/mcp-options.js';
 
 function parseArguments(argv: string[], env: NodeJS.ProcessEnv = {}) {
   return parser('0.0.0', ['node', 'main.js', ...argv], env)
@@ -17,28 +24,43 @@ function parseArguments(argv: string[], env: NodeJS.ProcessEnv = {}) {
     .parseSync();
 }
 
+function createTempFile(content: string, fileName: string) {
+  const filePath = path.join(os.tmpdir(), fileName);
+  fs.writeFileSync(filePath, content);
+  return {
+    path: filePath,
+    [Symbol.dispose]() {
+      try {
+        fs.unlinkSync(filePath);
+      } catch {
+        // ignore
+      }
+    },
+  };
+}
+
 describe('cli args parsing', () => {
   const defaultArgs = {
-    'category-emulation': true,
+    categoryInput: true,
+    categoryNavigation: true,
     categoryEmulation: true,
-    'category-performance': true,
     categoryPerformance: true,
-    'category-network': true,
     categoryNetwork: true,
-    'category-extensions': false,
-    categoryExtensions: false,
-    'category-experimental-third-party': false,
-    categoryExperimentalThirdParty: false,
-    'auto-connect': undefined,
+    categoryDebugging: true,
+    categoryMemory: true,
+    categoryOpera: true,
     autoConnect: undefined,
-    'performance-crux': false,
     performanceCrux: false,
-    'usage-statistics': false,
     usageStatistics: false,
-    'redact-network-headers': false,
+    javascriptEvaluation: true,
     redactNetworkHeaders: false,
-    'allow-unrestricted-paths': false,
     allowUnrestrictedPaths: false,
+    filesystemRoot: DEFAULT_FILESYSTEM_ROOT,
+    memoryDebugging: false,
+    experimentalStructuredContent: false,
+    pageIdRouting: true,
+    sourceMaps: true,
+    devtoolsComments: false,
   };
 
   it('parses with default args', async () => {
@@ -52,6 +74,16 @@ describe('cli args parsing', () => {
     });
   });
 
+  it('parses with viaCli args', async () => {
+    const args = parseArguments(['--viaCli']);
+    assert.strictEqual(args.allowUnrestrictedPaths, true);
+    assert.strictEqual(args.headless, true);
+    assert.strictEqual(args.memoryDebugging, true);
+    assert.strictEqual(args.categoryExtensions, true);
+    assert.strictEqual(args.experimentalStructuredContent, true);
+    assert.strictEqual(args.viaCli, true);
+  });
+
   it('parses with browser url', async () => {
     const args = parseArguments(['--browserUrl', 'http://localhost:3000']);
     assert.deepStrictEqual(args, {
@@ -59,17 +91,22 @@ describe('cli args parsing', () => {
       _: [],
       headless: false,
       $0: 'npx opera-devtools-mcp@latest',
-      'browser-url': 'http://localhost:3000',
       browserUrl: 'http://localhost:3000',
-      u: 'http://localhost:3000',
     });
   });
 
   it('rejects unknown options', async () => {
-    assert.throws(
-      () => parseArguments(['--browserURL', 'http://localhost:3000']),
-      /Unknown argument: browserURL/,
-    );
+    let output = '';
+    const originalError = console.error;
+    console.error = (msg: string) => {
+      output += msg;
+    };
+    try {
+      parseArguments(['--browserURL', 'http://localhost:3000']);
+      assert.match(output, /Unknown arguments: --browserURL/);
+    } finally {
+      console.error = originalError;
+    }
   });
 
   it('parses mixed-form option names', async () => {
@@ -86,7 +123,6 @@ describe('cli args parsing', () => {
       headless: false,
       $0: 'npx opera-devtools-mcp@latest',
       channel: 'stable',
-      'user-data-dir': '/tmp/chrome-profile',
       userDataDir: '/tmp/chrome-profile',
     });
   });
@@ -98,9 +134,7 @@ describe('cli args parsing', () => {
       _: [],
       headless: false,
       $0: 'npx opera-devtools-mcp@latest',
-      'browser-url': undefined,
       browserUrl: undefined,
-      u: undefined,
       channel: 'stable',
     });
   });
@@ -112,8 +146,6 @@ describe('cli args parsing', () => {
       _: [],
       headless: false,
       $0: 'npx opera-devtools-mcp@latest',
-      'executable-path': '/tmp/test 123/chrome',
-      e: '/tmp/test 123/chrome',
       executablePath: '/tmp/test 123/chrome',
     });
   });
@@ -144,8 +176,47 @@ describe('cli args parsing', () => {
       headless: false,
       $0: 'npx opera-devtools-mcp@latest',
       channel: 'stable',
-      'chrome-arg': ['--no-sandbox', '--disable-setuid-sandbox'],
       chromeArg: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+  });
+
+  describe('filesystem roots', () => {
+    it('parses filesystem roots', async () => {
+      const args = parseArguments([
+        '--filesystem-root=/tmp/one',
+        '--filesystem-root=/tmp/two',
+      ]);
+      assert.deepStrictEqual(args.filesystemRoot, ['/tmp/one', '/tmp/two']);
+    });
+
+    it('parses workspace as an alias for filesystem roots', async () => {
+      const args = parseArguments([
+        '--workspace=/tmp/one',
+        '--workspace=/tmp/two',
+      ]);
+      assert.deepStrictEqual(args.filesystemRoot, ['/tmp/one', '/tmp/two']);
+    });
+
+    it('still accepts unrestricted paths without an explicit root', async () => {
+      const args = parseArguments(['--allow-unrestricted-paths']);
+      assert.strictEqual(args.allowUnrestrictedPaths, true);
+    });
+
+    it('lets an explicit workspace override the CLI unrestricted default', async () => {
+      const args = parseArguments(['--viaCli', '--workspace=/tmp/one']);
+      assert.strictEqual(args.allowUnrestrictedPaths, false);
+      assert.deepStrictEqual(args.filesystemRoot, ['/tmp/one']);
+    });
+
+    it('keeps the CLI unrestricted default when no workspace is set', async () => {
+      const args = parseArguments(['--viaCli']);
+      assert.strictEqual(args.allowUnrestrictedPaths, true);
+      assert.strictEqual(args.filesystemRoot, undefined);
+    });
+
+    it('uses yargs default identity to detect an unset CLI workspace', async () => {
+      const args = parseArguments([]);
+      assert.strictEqual(args.filesystemRoot, DEFAULT_FILESYSTEM_ROOT);
     });
   });
 
@@ -160,10 +231,6 @@ describe('cli args parsing', () => {
       headless: false,
       $0: 'npx opera-devtools-mcp@latest',
       channel: 'stable',
-      'ignore-default-chrome-arg': [
-        '--disable-extensions',
-        '--disable-cancel-all-touches',
-      ],
       ignoreDefaultChromeArg: [
         '--disable-extensions',
         '--disable-cancel-all-touches',
@@ -181,9 +248,7 @@ describe('cli args parsing', () => {
       _: [],
       headless: false,
       $0: 'npx opera-devtools-mcp@latest',
-      'ws-endpoint': 'ws://127.0.0.1:9222/devtools/browser/abc123',
       wsEndpoint: 'ws://127.0.0.1:9222/devtools/browser/abc123',
-      w: 'ws://127.0.0.1:9222/devtools/browser/abc123',
     });
   });
 
@@ -197,9 +262,7 @@ describe('cli args parsing', () => {
       _: [],
       headless: false,
       $0: 'npx opera-devtools-mcp@latest',
-      'ws-endpoint': 'wss://example.com:9222/devtools/browser/abc123',
       wsEndpoint: 'wss://example.com:9222/devtools/browser/abc123',
-      w: 'wss://example.com:9222/devtools/browser/abc123',
     });
   });
 
@@ -224,7 +287,6 @@ describe('cli args parsing', () => {
       headless: false,
       $0: 'npx opera-devtools-mcp@latest',
       channel: 'stable',
-      'category-emulation': false,
       categoryEmulation: false,
     });
   });
@@ -236,9 +298,23 @@ describe('cli args parsing', () => {
       headless: false,
       $0: 'npx opera-devtools-mcp@latest',
       channel: 'stable',
-      'auto-connect': true,
       autoConnect: true,
     });
+  });
+
+  it('rejects invalid screencast fps values', async () => {
+    const coerce = mcpOptions.experimentalScreencastFps.coerce;
+    assert.ok(coerce);
+
+    assert.strictEqual(coerce(undefined), undefined);
+    assert.strictEqual(coerce(10), 10);
+
+    for (const value of [0, -1, 10.5, Number.NaN]) {
+      assert.throws(
+        () => coerce(value),
+        /Invalid experimentalScreencastFps .* Expected a positive integer\./,
+      );
+    }
   });
 
   it('parses usage statistics flag', async () => {
@@ -253,6 +329,20 @@ describe('cli args parsing', () => {
     // Test disabling it
     const disabledArgs = parseArguments(['--no-usage-statistics']);
     assert.strictEqual(disabledArgs.usageStatistics, false);
+  });
+
+  it('parses javascript evaluation flag', async () => {
+    // Test default (should be true).
+    const defaultArgs = parseArguments(['main.js'], {});
+    assert.strictEqual(defaultArgs.javascriptEvaluation, true);
+
+    // Test enabling it
+    const enabledArgs = parseArguments(['--javascript-evaluation']);
+    assert.strictEqual(enabledArgs.javascriptEvaluation, true);
+
+    // Test disabling it
+    const disabledArgs = parseArguments(['--no-javascript-evaluation']);
+    assert.strictEqual(disabledArgs.javascriptEvaluation, false);
   });
 
   it('respects env variable', async () => {
@@ -348,5 +438,89 @@ describe('cli args parsing', () => {
       'https://a.com/*',
       'https://b.com/*',
     ]);
+  });
+
+  it('parses source-maps flag', async () => {
+    const defaultParsed = parseArguments(['main.js']);
+    assert.strictEqual(defaultParsed.sourceMaps, true);
+
+    const disabledArgs = parseArguments(['--no-source-maps']);
+    assert.strictEqual(disabledArgs.sourceMaps, false);
+
+    const explicitFalseArgs = parseArguments(['--source-maps=false']);
+    assert.strictEqual(explicitFalseArgs.sourceMaps, false);
+
+    const explicitTrueArgs = parseArguments(['--source-maps=true']);
+    assert.strictEqual(explicitTrueArgs.sourceMaps, true);
+  });
+
+  it('parses config option', async () => {
+    using testConfig = createTempFile(
+      JSON.stringify({
+        headless: true,
+        categoryInput: false,
+        blockedUrlPattern: ['https://example.com/*'],
+      }),
+      'cd4a.test.config.json',
+    );
+    const args = parseArguments(['--config', testConfig.path]);
+    assert.strictEqual(args.config, testConfig.path);
+    assert.strictEqual(args.headless, true);
+    assert.strictEqual(args.categoryInput, false);
+    assert.deepStrictEqual(args.blockedUrlPattern, ['https://example.com/*']);
+  });
+
+  it('parses config option mixed with cli arguments', async () => {
+    using testConfig = createTempFile(
+      JSON.stringify({
+        headless: true,
+        categoryInput: false,
+      }),
+      'cd4a.test.config.mixed.json',
+    );
+    const args = parseArguments([
+      '--config',
+      testConfig.path,
+      '--headless=false',
+      '--category-network=false',
+    ]);
+    assert.strictEqual(args.config, testConfig.path);
+    assert.strictEqual(args.headless, false);
+    assert.strictEqual(args.categoryInput, false);
+    assert.strictEqual(args.categoryNetwork, false);
+    assert.strictEqual(args.categoryMemory, true);
+  });
+
+  it('parses config should not allow no prefix', async () => {
+    using testConfig = createTempFile(
+      JSON.stringify({
+        headless: true,
+        'no-category-memory': true,
+      }),
+      'cd4a.test.config.mixed.json',
+    );
+    assert.throws(
+      () => parseArguments(['--config', testConfig.path]),
+      /Invalid JSON config file: Unknown argument: no-category-memory/,
+    );
+  });
+
+  it('parses config should not allow dashed property', async () => {
+    using testConfig = createTempFile(
+      JSON.stringify({
+        headless: true,
+        'category-memory': false,
+      }),
+      'cd4a.test.config.mixed.json',
+    );
+    assert.throws(
+      () => parseArguments(['--config', testConfig.path]),
+      /Invalid JSON config file: Unknown argument: category-memory/,
+    );
+  });
+
+  it('parses with devtoolsComments enabled', async () => {
+    const args = parseArguments(['--devtoolsComments']);
+    assert.strictEqual(args.devtoolsComments, true);
   });
 });

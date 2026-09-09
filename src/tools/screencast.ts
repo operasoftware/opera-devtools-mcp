@@ -25,7 +25,7 @@ const supportedExtensions: SupportedVideoExtension[] = ['.webm', '.mp4'];
 
 export const startScreencast = definePageTool(args => ({
   name: 'screencast_start',
-  description: `Starts recording a screencast (video) of the selected page in specified format.`,
+  description: `Starts recording a screencast (video) of the target page in specified format.`,
   annotations: {
     category: ToolCategory.DEBUGGING,
     readOnlyHint: false,
@@ -89,6 +89,7 @@ export const startScreencast = definePageTool(args => ({
         path: resolvedPath,
         format: format,
         ffmpegPath: args?.experimentalFfmpegPath,
+        fps: args?.experimentalScreencastFps,
       });
     } catch (err) {
       // If we generated a temporary directory for this recording, remove it so
@@ -123,7 +124,7 @@ export const startScreencast = definePageTool(args => ({
 
 export const stopScreencast = definePageTool({
   name: 'screencast_stop',
-  description: 'Stops the active screencast recording on the selected page.',
+  description: 'Stops the active screencast recording on the target page.',
   annotations: {
     category: ToolCategory.DEBUGGING,
     readOnlyHint: false,

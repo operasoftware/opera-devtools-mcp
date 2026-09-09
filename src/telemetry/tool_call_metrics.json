@@ -123,6 +123,10 @@
       {
         "name": "wait_for_stable_dom",
         "argType": "boolean"
+      },
+      {
+        "name": "page_id",
+        "argType": "number"
       }
     ]
   },
@@ -188,7 +192,8 @@
     "args": [
       {
         "name": "page_id",
-        "argType": "number"
+        "argType": "number",
+        "isDeprecated": true
       }
     ]
   },
@@ -871,7 +876,8 @@
       },
       {
         "name": "min_retained_size",
-        "argType": "number"
+        "argType": "number",
+        "isDeprecated": true
       },
       {
         "name": "exclude_primitives",
@@ -883,6 +889,10 @@
       },
       {
         "name": "page_size",
+        "argType": "number"
+      },
+      {
+        "name": "retained_size_length",
         "argType": "number"
       }
     ]
@@ -1100,6 +1110,51 @@
     "args": [
       {
         "name": "server_length",
+        "argType": "number"
+      }
+    ]
+  },
+  {
+    "name": "query_heapsnapshot_objects",
+    "args": [
+      {
+        "name": "file_path_length",
+        "argType": "number"
+      },
+      {
+        "name": "class_name_length",
+        "argType": "number"
+      },
+      {
+        "name": "property_name_length",
+        "argType": "number"
+      },
+      {
+        "name": "node_type_length",
+        "argType": "number"
+      },
+      {
+        "name": "retained_size_length",
+        "argType": "number"
+      },
+      {
+        "name": "self_size_length",
+        "argType": "number"
+      },
+      {
+        "name": "is_detached",
+        "argType": "boolean"
+      },
+      {
+        "name": "sort_by",
+        "argType": "string"
+      },
+      {
+        "name": "page_idx",
+        "argType": "number"
+      },
+      {
+        "name": "page_size",
         "argType": "number"
       }
     ]

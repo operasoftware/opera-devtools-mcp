@@ -8,7 +8,7 @@
  * streaming. Keep the diff to the three `this.hooks?.` call sites.
  */
 
-import type {parseArguments} from './bin/chrome-devtools-mcp-cli-options.js';
+import type {ParsedArguments} from './config/mcp-options.js';
 import type {McpContext} from './McpContext.js';
 import type {McpPage} from './McpPage.js';
 import type {DataFormat} from './McpResponse.js';
@@ -20,11 +20,10 @@ import type {
 } from './opera/toolHandlerHooks.js';
 import {SlimMcpResponse} from './SlimMcpResponse.js';
 import {ClearcutLogger} from './telemetry/ClearcutLogger.js';
-import {bucketizeLatency, buildContext} from './telemetry/transformation.js';
 import type {CallToolResult} from './third_party/index.js';
 import {zod} from './third_party/index.js';
-import type {ToolCategory} from './tools/categories.js';
-import {labels, OFF_BY_DEFAULT_CATEGORIES} from './tools/categories.js';
+import {labels} from './tools/categories.js';
+import {categoryToFlagName} from './config/category-options.js';
 import type {
   DefinedPageTool,
   DevToolsData,
@@ -34,12 +33,8 @@ import type {
 import {pageIdSchema} from './tools/ToolDefinition.js';
 import {logger} from './utils/logger.js';
 import type {Mutex} from './third_party/index.js';
-import {fileURLToPath} from 'node:url';
+import {fileURLToPath, pathToFileURL} from 'node:url';
 import {isLocalhost} from './utils/url.js';
-
-export function buildFlag(category: ToolCategory) {
-  return `category${category.charAt(0).toUpperCase() + category.slice(1)}`;
-}
 
 function buildDisabledMessage(
   toolName: string,
@@ -48,85 +43,31 @@ function buildDisabledMessage(
 ): string {
   const reason = categoryLabel
     ? `is in category ${categoryLabel} which`
-    : `requires experimental feature ${flag} and`;
+    : `requires ${flag.startsWith('--experimental') ? 'experimental feature' : 'flag'} ${flag} and`;
 
   return `Tool ${toolName} ${reason} is currently disabled. Enable it by running ${CLI_BIN_NAME} start ${flag}=true. For more information check the README.`;
 }
 
-function getCategoryStatus(
-  category: ToolCategory,
-  serverArgs: ReturnType<typeof parseArguments>,
-): {categoryFlag?: string; disabled: boolean} {
-  const categoryFlag = buildFlag(category);
-
-  const flagValue = serverArgs[categoryFlag];
-
-  const isDisabled = OFF_BY_DEFAULT_CATEGORIES.includes(category)
-    ? !flagValue
-    : flagValue === false;
-
-  if (isDisabled) {
-    return {
-      categoryFlag,
-      disabled: true,
-    };
-  }
-
-  return {
-    disabled: false,
-  };
-}
-
-function getConditionStatus(
-  condition: string,
-  serverArgs: ReturnType<typeof parseArguments>,
-): {conditionFlag?: string; disabled: boolean} {
-  if (condition && !serverArgs[condition]) {
-    return {conditionFlag: condition, disabled: true};
-  }
-
-  return {disabled: false};
-}
-
 function getToolStatusInfo(
   tool: ToolDefinition | DefinedPageTool,
-  serverArgs: ReturnType<typeof parseArguments>,
+  serverArgs: ParsedArguments,
 ): {disabled: boolean; reason?: string} {
   const category = tool.annotations.category;
-  const categoryCheck = getCategoryStatus(category, serverArgs);
-
-  if (category && categoryCheck.disabled) {
-    if (!categoryCheck.categoryFlag) {
-      throw new Error(
-        'when the category is disabled there should always be a flag set',
-      );
+  if (category) {
+    const flag = categoryToFlagName(category);
+    if (!serverArgs[flag]) {
+      return {
+        disabled: true,
+        reason: buildDisabledMessage(tool.name, `--${flag}`, labels[category]),
+      };
     }
-
-    return {
-      disabled: true,
-      reason: buildDisabledMessage(
-        tool.name,
-        `--${categoryCheck.categoryFlag}`,
-        labels[category!],
-      ),
-    };
   }
 
   for (const condition of tool.annotations.conditions || []) {
-    const conditionCheck = getConditionStatus(condition, serverArgs);
-    if (conditionCheck.disabled) {
-      if (!conditionCheck.conditionFlag) {
-        throw new Error(
-          'when the condition is disabled there should always be a flag set',
-        );
-      }
-
+    if (!serverArgs[condition]) {
       return {
         disabled: true,
-        reason: buildDisabledMessage(
-          tool.name,
-          `--${conditionCheck.conditionFlag}`,
-        ),
+        reason: buildDisabledMessage(tool.name, `--${condition}`),
       };
     }
   }
@@ -160,14 +101,21 @@ function buildUnknownArgumentsMessage(
   return `Unknown ${unknownLabel} for tool "${toolName}": ${formatArgumentNames(unknownArgumentNames)}. ${expectedArguments} ${correction} and retry.`;
 }
 
-function extractPaths(value: unknown): string[] {
-  if (typeof value === 'string') {
-    return [value];
+async function validateAndResolvePathOrUrl(
+  filePathOrUrl: string,
+  context: McpContext,
+): Promise<string> {
+  try {
+    const url = new URL(filePathOrUrl);
+    if (url.protocol === 'file:') {
+      return pathToFileURL(await context.validatePath(fileURLToPath(url))).href;
+    } else if (['http:', 'https:', 'ws:', 'wss:'].includes(url.protocol)) {
+      return filePathOrUrl;
+    }
+  } catch {
+    // Suppress parsing errors for regular file paths.
   }
-  if (Array.isArray(value)) {
-    return value.filter(item => typeof item === 'string');
-  }
-  return [];
+  return await context.validatePath(filePathOrUrl);
 }
 
 function isLocalBrowser(context: McpContext): boolean {
@@ -203,25 +151,25 @@ async function validateToolFiles(
   context: McpContext,
 ): Promise<void> {
   const isLocal = isLocalBrowser(context);
-  const pathsOrUrlsToValidate: string[] = [];
   for (const [key, option] of Object.entries(tool.verifyFilesSchema)) {
     if (shouldValidateFile(option, isLocal)) {
-      pathsOrUrlsToValidate.push(...extractPaths(params[key]));
-    }
-  }
-  for (const filePathOrUrl of pathsOrUrlsToValidate) {
-    let filePath = filePathOrUrl;
-    try {
-      const url = new URL(filePathOrUrl);
-      if (url.protocol === 'file:') {
-        filePath = fileURLToPath(url);
-      } else if (['http:', 'https:', 'ws:', 'wss:'].includes(url.protocol)) {
-        continue;
+      const val = params[key];
+      if (typeof val === 'string') {
+        params[key] = await validateAndResolvePathOrUrl(val, context);
+      } else if (Array.isArray(val)) {
+        const updated: unknown[] = [];
+        for (const item of val) {
+          if (typeof item === 'string') {
+            updated.push(await validateAndResolvePathOrUrl(item, context));
+          } else {
+            throw new Error(
+              'Unexpected non-string value as a file path or URL',
+            );
+          }
+        }
+        params[key] = updated;
       }
-    } catch {
-      // Suppress parsing errors for regular file paths.
     }
-    await context.validatePath(filePath);
   }
 }
 
@@ -233,7 +181,7 @@ export class ToolHandler {
 
   constructor(
     private readonly tool: ToolDefinition | DefinedPageTool,
-    private readonly serverArgs: ReturnType<typeof parseArguments>,
+    private readonly serverArgs: ParsedArguments,
     private readonly getContext: () => Promise<McpContext>,
     private readonly toolMutex: Mutex,
     private readonly hooks?: OperaToolHooks,
@@ -245,7 +193,7 @@ export class ToolHandler {
     this.inputSchema =
       'pageScoped' in tool &&
       tool.pageScoped &&
-      serverArgs.experimentalPageIdRouting &&
+      serverArgs.pageIdRouting &&
       !serverArgs.slim
         ? {...pageIdSchema, ...tool.schema}
         : tool.schema;
@@ -322,7 +270,7 @@ export class ToolHandler {
           const pageId =
             typeof params.pageId === 'number' ? params.pageId : undefined;
           page =
-            this.serverArgs.experimentalPageIdRouting &&
+            this.serverArgs.pageIdRouting &&
             pageId !== undefined &&
             !this.serverArgs.slim
               ? context.getPageById(pageId)
@@ -354,10 +302,7 @@ export class ToolHandler {
         response.setError(err);
       }
       devToolsData = await context.getDevToolsData(page);
-      const targetPage = page ?? context.getSelectedMcpPage();
-      if (targetPage?.pptrPage?.isClosed() === false) {
-        pageUrl = targetPage.pptrPage.url();
-      }
+      pageUrl = context.getSelectedMcpPageUrl(page);
       // Resolve data format: --experimentalDataFormat takes precedence, fall back to legacy --experimentalToonFormat
       let dataFormat: DataFormat = 'default';
       if (this.serverArgs.experimentalDataFormat) {
@@ -399,14 +344,14 @@ export class ToolHandler {
         isError: true,
       };
     } finally {
-      const context = buildContext(devToolsData, pageUrl);
       void ClearcutLogger.get()?.logToolInvocation({
         toolName: this.tool.name,
         params,
         schema: this.inputSchema,
         success,
-        latencyMs: bucketizeLatency(Date.now() - startTime),
-        context,
+        latencyMs: Date.now() - startTime,
+        devToolsData,
+        pageUrl,
       });
       guard?.[Symbol.dispose]();
     }

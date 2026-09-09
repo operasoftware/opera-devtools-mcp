@@ -6,9 +6,10 @@
  * Modified by Opera Software AS.
  */
 
-import type {ParsedArguments} from '../bin/chrome-devtools-mcp-cli-options.js';
+import type {ParsedArguments} from '../config/mcp-options.js';
 import * as operaTools from '../opera/tools/opera.js';
 
+import * as commentsTools from './comments.js';
 import * as consoleTools from './console.js';
 import * as emulationTools from './emulation.js';
 import * as extensionTools from './extensions.js';
@@ -32,6 +33,7 @@ export const createTools = (args: ParsedArguments) => {
   const rawTools = args.slim
     ? Object.values(slimTools)
     : [
+        ...(args.devtoolsComments ? Object.values(commentsTools) : []),
         ...Object.values(consoleTools),
         ...Object.values(emulationTools),
         ...Object.values(extensionTools),

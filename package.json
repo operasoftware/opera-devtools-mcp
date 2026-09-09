@@ -68,15 +68,15 @@
     "@types/yargs": "^17.0.33",
     "@typescript-eslint/eslint-plugin": "^8.43.0",
     "@typescript-eslint/parser": "^8.43.0",
-    "core-js": "3.49.0",
+    "core-js": "3.50.0",
     "eslint": "^10.7.0",
     "eslint-import-resolver-typescript": "^4.4.4",
     "eslint-plugin-import": "^2.32.0",
     "globals": "^17.0.0",
     "lighthouse": "13.4.1",
     "prettier": "^3.6.2",
-    "puppeteer": "25.6.0",
-    "rollup": "4.62.4",
+    "puppeteer": "25.10.0",
+    "rollup": "4.63.1",
     "rollup-plugin-cleanup": "^3.2.1",
     "rollup-plugin-license": "^3.6.0",
     "semver": "^7.7.4",
@@ -86,6 +86,18 @@
     "yargs": "18.1.0",
     "zod": "^3.25.76"
   },
+  "peerDependencies": {
+    "@blackwell-systems/gcf": "^2.2.2",
+    "@toon-format/toon": "^4.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@toon-format/toon": {
+      "optional": true
+    },
+    "@blackwell-systems/gcf": {
+      "optional": true
+    }
+  },
   "engines": {
     "node": "^20.19.0 || ^22.12.0 || >=23"
   },
@@ -94,5 +106,12 @@
       "eslint": "$eslint"
     },
     "puppeteer-core": "$puppeteer"
+  },
+  "allowScripts": {
+    "core-js": false,
+    "@google/genai": false,
+    "protobufjs": false,
+    "unrs-resolver": false,
+    "puppeteer": true
   }
 }

@@ -12,16 +12,22 @@ import {logger} from '../utils/logger.js';
 
 import type {ErrorCode} from './errors.js';
 import type {LocalState, Persistence} from './persistence.js';
-import {sanitizeParams, stripUnderscoreBeforeNumber} from './transformation.js';
+import {
+  bucketizeDaysSince,
+  bucketizeLatency,
+  buildContext,
+  sanitizeParams,
+  stripUnderscoreBeforeNumber,
+} from './transformation.js';
 import {
   McpClient,
   type FlagUsage,
   WatchdogMessageType,
   OsType,
   type ToolInvocation,
-  type ToolInvocationContext,
 } from './types.js';
 import {WatchdogClient} from './WatchdogClient.js';
+import type {DevToolsData} from '../tools/ToolDefinition.js';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -90,7 +96,9 @@ export class ClearcutLogger {
 
   setClientName(clientName: string): void {
     const lowerName = clientName.toLowerCase();
-    if (lowerName.includes('claude')) {
+    if (lowerName.includes('claude-desktop')) {
+      this.#mcpClient = McpClient.MCP_CLIENT_CLAUDE_DESKTOP;
+    } else if (lowerName.includes('claude')) {
       this.#mcpClient = McpClient.MCP_CLIENT_CLAUDE_CODE;
     } else if (lowerName.includes('gemini')) {
       this.#mcpClient = McpClient.MCP_CLIENT_GEMINI_CLI;
@@ -98,10 +106,16 @@ export class ClearcutLogger {
       this.#mcpClient = McpClient.MCP_CLIENT_DT_MCP_CLI;
     } else if (lowerName.includes('openclaw')) {
       this.#mcpClient = McpClient.MCP_CLIENT_OPENCLAW;
+    } else if (lowerName.includes('opencode')) {
+      this.#mcpClient = McpClient.MCP_CLIENT_OPENCODE;
     } else if (lowerName.includes('codex')) {
       this.#mcpClient = McpClient.MCP_CLIENT_CODEX;
     } else if (lowerName.includes('antigravity')) {
       this.#mcpClient = McpClient.MCP_CLIENT_ANTIGRAVITY;
+    } else if (lowerName.includes('grok') || lowerName.includes('xai')) {
+      this.#mcpClient = McpClient.MCP_CLIENT_GROK;
+    } else if (lowerName.includes('copilot')) {
+      this.#mcpClient = McpClient.MCP_CLIENT_GITHUB_COPILOT;
     } else {
       this.#mcpClient = McpClient.MCP_CLIENT_OTHER;
     }
@@ -113,16 +127,18 @@ export class ClearcutLogger {
     schema: zod.ZodRawShape;
     success: boolean;
     latencyMs: number;
-    context: ToolInvocationContext;
+    devToolsData?: DevToolsData;
+    pageUrl?: string;
   }): Promise<void> {
+    const context = buildContext(args.devToolsData, args.pageUrl);
     const sanitizedToolName = stripUnderscoreBeforeNumber(args.toolName);
     const tool_invocation: ToolInvocation = {
       tool_name: sanitizedToolName,
       success: args.success,
-      latency_ms: args.latencyMs,
+      latency_ms: bucketizeLatency(args.latencyMs),
     };
-    if (Object.keys(args.context).length > 0) {
-      tool_invocation.context = args.context;
+    if (Object.keys(context).length > 0) {
+      tool_invocation.context = context;
     }
     if (Object.keys(args.params).length > 0) {
       tool_invocation.tool_params = {
@@ -172,7 +188,7 @@ export class ClearcutLogger {
           payload: {
             mcp_client: this.#mcpClient,
             daily_active: {
-              days_since_last_active: daysSince,
+              days_since_last_active: bucketizeDaysSince(daysSince),
             },
           },
         });

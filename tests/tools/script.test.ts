@@ -10,8 +10,9 @@ import {describe, it} from 'node:test';
 
 import sinon from 'sinon';
 
-import type {ParsedArguments} from '../../src/bin/chrome-devtools-mcp-cli-options.js';
+import type {ParsedArguments} from '../../src/config/mcp-options.js';
 import {TextSnapshot} from '../../src/TextSnapshot.js';
+import {zod} from '../../src/third_party/index.js';
 import {installExtension} from '../../src/tools/extensions.js';
 import {evaluateScript} from '../../src/tools/script.js';
 import {WaitForHelper} from '../../src/utils/WaitForHelper.js';
@@ -19,7 +20,6 @@ import {serverHooks} from '../server.js';
 import {
   assertNoServiceWorkerReported,
   extractExtensionId,
-  getTextContent,
   html,
   withMcpContext,
 } from '../utils.js';
@@ -70,30 +70,6 @@ describe('script', () => {
         } finally {
           spy.restore();
         }
-      });
-    });
-    it('still awaits a navigation when waitForStableDom is false', async () => {
-      await withMcpContext(async (response, context) => {
-        server.addHtmlRoute('/nav-target', html`<main>navigated</main>`);
-        const url = server.getRoute('/nav-target');
-        await evaluateScript().handler(
-          {
-            params: {
-              function: `() => {
-                location.href = '${url}';
-              }`,
-              waitForStableDom: false,
-            },
-          },
-          response,
-          context,
-        );
-        const result = await response.handle(context);
-        const textContent = getTextContent(result.content[0]);
-        assert.ok(
-          textContent.includes(`Page navigated to ${url}`),
-          `Expected the navigation to be awaited and reported, got: ${textContent}`,
-        );
       });
     });
     it('runs in selected page', async () => {
@@ -426,7 +402,7 @@ describe('script', () => {
                 params: {
                   function: String(() => 'test'),
                   serviceWorkerId: 'example_service_worker',
-                  pageId: '1',
+                  pageId: 1,
                 },
               },
               response,
@@ -468,6 +444,42 @@ describe('script', () => {
         {},
         {categoryExtensions: true},
       );
+    });
+
+    it('makes pageId optional in schema when categoryExtensions is true and pageIdRouting is true', () => {
+      const tool = evaluateScript({
+        categoryExtensions: true,
+        pageIdRouting: true,
+      } as ParsedArguments);
+      const schema = zod.object(tool.schema);
+      const validSw = schema.safeParse({
+        function: '() => 1',
+        serviceWorkerId: 'sw_1',
+      });
+      assert.strictEqual(validSw.success, true);
+
+      const validPage = schema.safeParse({
+        function: '() => 1',
+        pageId: 1,
+      });
+      assert.strictEqual(validPage.success, true);
+    });
+
+    it('makes pageId required in schema when categoryExtensions is false and pageIdRouting is true', () => {
+      const tool = evaluateScript({
+        pageIdRouting: true,
+      } as ParsedArguments);
+      const schema = zod.object(tool.schema);
+      const resultWithoutPageId = schema.safeParse({
+        function: '() => 1',
+      });
+      assert.strictEqual(resultWithoutPageId.success, false);
+
+      const resultWithPageId = schema.safeParse({
+        function: '() => 1',
+        pageId: 1,
+      });
+      assert.strictEqual(resultWithPageId.success, true);
     });
   });
 });
