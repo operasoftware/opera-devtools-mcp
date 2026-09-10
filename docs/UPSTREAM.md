@@ -116,6 +116,7 @@ wrong place.
 | `tests/ToolHandler.test.ts`                 | Opera env var keys, plus coverage for the `OperaToolHooks` seam                                                |
 | `tests/telemetry/transformation.test.ts`    | Adds coverage for `ZodRecord` telemetry handling (count of record keys)                                        |
 | `tests/McpPage.test.ts`                     | Adds coverage for `resolveElementHandle` distinguishing a rejected lookup from a resolved-but-absent element   |
+| `tests/e2e/opera-devtools-commands.test.ts` | Inline assertion strings use `opera-devtools` binary name in restart-command suggestions                       |
 
 ### Upstream files we rename or delete
 

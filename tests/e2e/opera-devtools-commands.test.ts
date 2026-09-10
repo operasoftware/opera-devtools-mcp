@@ -120,7 +120,7 @@ describe('opera-devtools', () => {
     );
     assert(
       result.stdout.includes(
-        'chrome-devtools start --javascriptEvaluation=true',
+        'opera-devtools start --javascriptEvaluation=true',
       ),
       'restart command suggestion is missing: ' + result.stdout,
     );
