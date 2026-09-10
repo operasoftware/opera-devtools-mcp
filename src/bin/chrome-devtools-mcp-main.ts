@@ -11,7 +11,7 @@ import '../utils/polyfill.js';
 import process from 'node:process';
 
 import {closeBrowser} from '../browser.js';
-import {createMcpServer, logDisclaimers} from '../index.js';
+import {McpServer, logDisclaimers} from '../index.js';
 import {
   ENV_CRASH_ON_UNCAUGHT,
   PACKAGE_NAME,
@@ -25,7 +25,7 @@ import {checkForUpdates} from '../utils/check-for-updates.js';
 import {logger, saveLogsToFile} from '../utils/logger.js';
 import {VERSION} from '../version.js';
 
-import {cliOptions, parseArguments} from './chrome-devtools-mcp-cli-options.js';
+import {mcpOptions, parseArguments} from '../config/mcp-options.js';
 
 await checkForUpdates(`Run \`npm install ${PACKAGE_NAME}@latest\` to update.`);
 
@@ -80,7 +80,7 @@ process.on('SIGHUP', () => {
   void shutdown('SIGHUP');
 });
 
-const {server} = await createMcpServer(args, {
+const server = await McpServer.from(args, {
   logFile,
 });
 const transport = new StdioServerTransport();
@@ -88,4 +88,4 @@ await server.connect(transport);
 logger?.(`${PRODUCT_NAME} connected`);
 logDisclaimers(args);
 void ClearcutLogger.get()?.logDailyActiveIfNeeded();
-void ClearcutLogger.get()?.logServerStart(computeFlagUsage(args, cliOptions));
+void ClearcutLogger.get()?.logServerStart(computeFlagUsage(args, mcpOptions));

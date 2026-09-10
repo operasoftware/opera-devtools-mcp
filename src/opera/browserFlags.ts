@@ -7,7 +7,7 @@
 
 import type fs from 'node:fs';
 
-import type {parseArguments} from '../bin/chrome-devtools-mcp-cli-options.js';
+import type {parseArguments} from '../config/mcp-options.js';
 import {
   closeBrowserIfOpen,
   ensureBrowserLaunched,

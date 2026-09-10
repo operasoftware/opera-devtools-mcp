@@ -28,6 +28,7 @@ src/version.ts                         merge=opera-ours
 # Generated artifacts: never hand-merge, always `npm run gen` after the merge.
 package-lock.json                      merge=opera-ours
 docs/tool-reference.md                 merge=opera-ours
-src/bin/chrome-devtools-cli-options.ts merge=opera-ours
+docs/configuration.md                  merge=opera-ours
+src/config/cli-options.ts              merge=opera-ours
 src/telemetry/tool_call_metrics.json   merge=opera-ours
 src/telemetry/flag_usage_metrics.json  merge=opera-ours

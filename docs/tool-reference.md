@@ -39,7 +39,7 @@
   - [`take_snapshot`](#take_snapshot)
   - [`screencast_start`](#screencast_start)
   - [`screencast_stop`](#screencast_stop)
-- **[Memory](#memory)** (12 tools)
+- **[Memory](#memory)** (13 tools)
   - [`take_heapsnapshot`](#take_heapsnapshot)
   - [`close_heapsnapshot`](#close_heapsnapshot)
   - [`compare_heapsnapshots`](#compare_heapsnapshots)
@@ -52,6 +52,7 @@
   - [`get_heapsnapshot_retainers`](#get_heapsnapshot_retainers)
   - [`get_heapsnapshot_retaining_paths`](#get_heapsnapshot_retaining_paths)
   - [`get_heapsnapshot_summary`](#get_heapsnapshot_summary)
+  - [`query_heapsnapshot_objects`](#query_heapsnapshot_objects)
 - **[Opera](#opera)** (14 tools)
   - [`opera_authenticate_mcp_server`](#opera_authenticate_mcp_server)
   - [`opera_call_mcp_tool`](#opera_call_mcp_tool)
@@ -93,6 +94,7 @@
 
 **Parameters:**
 
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **uid** (string) **(required)**: The uid of an element on the page from the page content snapshot
 - **dblClick** (boolean) _(optional)_: Set to true for double clicks. Default is false.
 - **includeSnapshot** (boolean) _(optional)_: Whether to include a snapshot in the response. Default is false.
@@ -106,6 +108,7 @@
 **Parameters:**
 
 - **from_uid** (string) **(required)**: The uid of the element to [`drag`](#drag)
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **to_uid** (string) **(required)**: The uid of the element to drop into
 - **includeSnapshot** (boolean) _(optional)_: Whether to include a snapshot in the response. Default is false.
 
@@ -117,6 +120,7 @@
 
 **Parameters:**
 
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **uid** (string) **(required)**: The uid of an element on the page from the page content snapshot
 - **value** (string) **(required)**: The value to [`fill`](#fill) in. "true" or "false" for checkboxes and toggles, "true" for radio buttons.
 - **includeSnapshot** (boolean) _(optional)_: Whether to include a snapshot in the response. Default is false.
@@ -130,6 +134,7 @@
 **Parameters:**
 
 - **elements** (array) **(required)**: Elements from snapshot to [`fill`](#fill) out.
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **includeSnapshot** (boolean) _(optional)_: Whether to include a snapshot in the response. Default is false.
 
 ---
@@ -141,6 +146,7 @@
 **Parameters:**
 
 - **action** (enum: "accept", "dismiss") **(required)**: Whether to dismiss or accept the dialog
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **promptText** (string) _(optional)_: Optional prompt text to enter into the dialog.
 
 ---
@@ -151,6 +157,7 @@
 
 **Parameters:**
 
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **uid** (string) **(required)**: The uid of an element on the page from the page content snapshot
 - **includeSnapshot** (boolean) _(optional)_: Whether to include a snapshot in the response. Default is false.
 
@@ -163,6 +170,7 @@
 **Parameters:**
 
 - **key** (string) **(required)**: A key or a combination (e.g., "Enter", "Control+A", "Control++", "Control+Shift+R"). Modifiers: Control, Shift, Alt, Meta
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **includeSnapshot** (boolean) _(optional)_: Whether to include a snapshot in the response. Default is false.
 
 ---
@@ -173,6 +181,7 @@
 
 **Parameters:**
 
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **text** (string) **(required)**: The text to type
 - **submitKey** (string) _(optional)_: Optional key to press after typing. E.g., "Enter", "Tab", "Escape"
 
@@ -185,6 +194,7 @@
 **Parameters:**
 
 - **filePaths** (array) **(required)**: One or more files paths to upload. File paths have to be local to the browser instance (not the MCP).
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **uid** (string) **(required)**: The uid of the file input element or an element that will open file chooser on the page from the page content snapshot
 - **includeSnapshot** (boolean) _(optional)_: Whether to include a snapshot in the response. Default is false.
 
@@ -196,6 +206,7 @@
 
 **Parameters:**
 
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **x** (number) **(required)**: The x coordinate
 - **y** (number) **(required)**: The y coordinate
 - **dblClick** (boolean) _(optional)_: Set to true for double clicks. Default is false.
@@ -229,6 +240,7 @@
 
 **Parameters:**
 
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **handleBeforeUnload** (enum: "accept", "dismiss") _(optional)_: Whether to auto accept or beforeunload dialogs triggered by this navigation. Default is accept.
 - **ignoreCache** (boolean) _(optional)_: Whether to ignore cache on reload.
 - **initScript** (string) _(optional)_: A JavaScript script to be executed on each new document before any other scripts for the next navigation.
@@ -246,7 +258,7 @@
 
 - **url** (string) **(required)**: URL to load in a new page.
 - **background** (boolean) _(optional)_: Whether to open the page in the background without bringing it to the front. Default is false (foreground).
-- **isolatedContext** (string) _(optional)_: If specified, the page is created in an isolated browser context with the given name. Pages in the same browser context share cookies and storage. Pages in different browser contexts are fully isolated.
+- **isolatedContext** (string) _(optional)_: If specified, the page is created in an isolated browser context with the given name. Pages in the same browser context share cookies and storage. Pages in different browser contexts are fully isolated (useful for clean-slate testing of cookies and authentication).
 - **timeout** (integer) _(optional)_: Maximum wait time in milliseconds. If set to 0, the default timeout will be used.
 
 ---
@@ -268,6 +280,7 @@
 
 **Parameters:**
 
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **text** (array) **(required)**: Non-empty list of texts. Resolves when any value appears on the page.
 - **timeout** (integer) _(optional)_: Maximum wait time in milliseconds. If set to 0, the default timeout will be used.
 
@@ -277,10 +290,11 @@
 
 ### `emulate`
 
-**Description:** Emulates various features on the selected page.
+**Description:** Emulates various features on the target page.
 
 **Parameters:**
 
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **colorScheme** (enum: "dark", "light", "auto") _(optional)_: [`Emulate`](#emulate) the dark or the light mode. Set to "auto" to reset to the default.
 - **cpuThrottlingRate** (number) _(optional)_: Represents the CPU slowdown factor. Omit or set the rate to 1 to disable throttling
 - **extraHttpHeaders** (string) _(optional)_: Extra HTTP headers as a JSON string object, e.g. {"X-Custom": "value", "Authorization": "Bearer token"}. Headers are included into every HTTP request originating from the page and persist across navigations until cleared. Pass an empty string to clear all extra headers.
@@ -293,11 +307,12 @@
 
 ### `resize_page`
 
-**Description:** Resizes the selected page's window so that the page has specified dimension
+**Description:** Resizes the page's window so that the page has specified dimension
 
 **Parameters:**
 
 - **height** (number) **(required)**: Page height
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **width** (number) **(required)**: Page width
 
 ---
@@ -312,27 +327,30 @@
 
 - **insightName** (string) **(required)**: The name of the Insight you want more information on. For example: "DocumentLatency" or "LCPBreakdown"
 - **insightSetId** (string) **(required)**: The id for the specific insight set. Only use the ids given in the "Available insight sets" list.
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 
 ---
 
 ### `performance_start_trace`
 
-**Description:** Start a performance trace on the selected webpage. Use to find frontend performance issues, Core Web Vitals (LCP, INP, CLS), and improve page load speed.
+**Description:** Start a performance trace on the target webpage. Use to find frontend performance issues, Core Web Vitals (LCP, INP, CLS), and improve page load speed.
 
 **Parameters:**
 
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **autoStop** (boolean) _(optional)_: Determines if the trace recording should be automatically stopped.
 - **filePath** (string) _(optional)_: The absolute file path, or a file path relative to the current working directory, to save the raw trace data. For example, trace.json.gz (compressed) or trace.json (uncompressed).
-- **reload** (boolean) _(optional)_: Determines if, once tracing has started, the current selected page should be automatically reloaded. Navigate the page to the right URL using the [`navigate_page`](#navigate_page) tool BEFORE starting the trace if reload or autoStop is set to true.
+- **reload** (boolean) _(optional)_: Determines if, once tracing has started, the target page should be automatically reloaded. Navigate the page to the right URL using the [`navigate_page`](#navigate_page) tool BEFORE starting the trace if reload or autoStop is set to true.
 
 ---
 
 ### `performance_stop_trace`
 
-**Description:** Stop the active performance trace recording on the selected webpage.
+**Description:** Stop the active performance trace recording on the target webpage.
 
 **Parameters:**
 
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **filePath** (string) _(optional)_: The absolute file path, or a file path relative to the current working directory, to save the raw trace data. For example, trace.json.gz (compressed) or trace.json (uncompressed).
 
 ---
@@ -341,10 +359,11 @@
 
 ### `get_network_request`
 
-**Description:** Gets a network request by an optional reqid, if omitted returns the currently selected request in the DevTools Network panel.
+**Description:** Gets a network request by an optional reqid, if omitted returns the currently selected request in the DevTools Network panel. Useful for inspecting request headers (including 'Cookie') and response headers (including 'Set-Cookie' and directives).
 
 **Parameters:**
 
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **reqid** (number) _(optional)_: The reqid of the network request. If omitted returns the currently selected request in the DevTools Network panel.
 - **requestFilePath** (string) _(optional)_: The absolute or relative path to a .network-request file to save the request body to. If omitted, the body is returned inline.
 - **responseFilePath** (string) _(optional)_: The absolute or relative path to a .network-response file to save the response body to. If omitted, the body is returned inline.
@@ -353,10 +372,11 @@
 
 ### `list_network_requests`
 
-**Description:** Lists the most recent requests for the currently selected page since the last navigation.
+**Description:** Lists the most recent requests for the target page since the last navigation.
 
 **Parameters:**
 
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **includePreservedRequests** (boolean) _(optional)_: Set to true to return the preserved requests over the last 3 navigations.
 - **pageIdx** (integer) _(optional)_: Page number to return (0-based). When omitted, returns the first page.
 - **pageSize** (integer) _(optional)_: Maximum number of requests to return. When omitted, returns all requests.
@@ -368,14 +388,15 @@
 
 ### `evaluate_script`
 
-**Description:** Evaluate a JavaScript function inside the currently selected page. Returns the response as JSON, so returned values have to be JSON-serializable.
+**Description:** Evaluate a JavaScript function inside the target page. Returns the response as JSON, so returned values have to be JSON-serializable.
 
 **Parameters:**
 
-- **function** (string) **(required)**: A JavaScript function declaration to be executed by the tool in the currently selected page.
+- **function** (string) **(required)**: A JavaScript function declaration to be executed by the tool in the target page.
   Example without arguments: `() => document.title` or `async () => await fetch("example.com")`.
   Example with arguments: `(el) => el.innerText`
 
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **args** (array) _(optional)_: An optional list of arguments to pass to the function.
 - **dialogAction** (string) _(optional)_: Handle dialogs while execution. "accept", "dismiss", or string for response of window.prompt. Defaults to accept.
 - **filePath** (string) _(optional)_: The absolute or relative path to a file to save the script output to. If omitted, the output is returned inline.
@@ -390,6 +411,7 @@
 **Parameters:**
 
 - **msgid** (number) **(required)**: The msgid of a console message on the page from the listed console messages
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 
 ---
 
@@ -399,6 +421,7 @@
 
 **Parameters:**
 
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **device** (enum: "desktop", "mobile") _(optional)_: Device to [`emulate`](#emulate).
 - **mode** (enum: "navigation", "snapshot") _(optional)_: "navigation" reloads &amp; audits. "snapshot" analyzes current state.
 - **outputDirPath** (string) _(optional)_: Directory for reports. If omitted, uses temporary files.
@@ -407,10 +430,11 @@
 
 ### `list_console_messages`
 
-**Description:** List all console messages for the currently selected page since the last navigation.
+**Description:** List all console messages for the target page since the last navigation.
 
 **Parameters:**
 
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **includePreservedMessages** (boolean) _(optional)_: Set to true to return the preserved messages over the last 3 navigations.
 - **includeStackTraces** (boolean) _(optional)_: Set to true to include the stack trace for each message when available. Increases the response size.
 - **pageIdx** (integer) _(optional)_: Page number to return (0-based). When omitted, returns the first page.
@@ -426,6 +450,7 @@
 
 **Parameters:**
 
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **filePath** (string) _(optional)_: The absolute path, or a path relative to the current working directory, to save the screenshot to instead of attaching it to the response.
 - **format** (enum: "png", "jpeg", "webp") _(optional)_: Type of format to save the screenshot as. Default is "png"
 - **fullPage** (boolean) _(optional)_: If set to true takes a screenshot of the full page instead of the currently visible viewport. Incompatible with uid.
@@ -436,12 +461,13 @@
 
 ### `take_snapshot`
 
-**Description:** Take a text snapshot of the currently selected page based on the a11y tree. The snapshot lists page elements along with a unique
+**Description:** Take a text snapshot of the target page based on the a11y tree. The snapshot lists page elements along with a unique
 identifier (uid). Always use the latest snapshot. Prefer taking a snapshot over taking a screenshot. The snapshot indicates the element selected
 in the DevTools Elements panel (if any).
 
 **Parameters:**
 
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **filePath** (string) _(optional)_: The absolute path, or a path relative to the current working directory, to save the snapshot to instead of attaching it to the response.
 - **verbose** (boolean) _(optional)_: Whether to include all possible information available in the full a11y tree. Default is false.
 
@@ -449,19 +475,22 @@ in the DevTools Elements panel (if any).
 
 ### `screencast_start`
 
-**Description:** Starts recording a screencast (video) of the selected page in specified format. (requires flag: --experimentalScreencast=true)
+**Description:** Starts recording a screencast (video) of the target page in specified format. (requires flag: --experimentalScreencast=true)
 
 **Parameters:**
 
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **filePath** (string) _(optional)_: Output file path (.webm,.mp4 are supported). Uses mkdtemp to generate a unique path if not provided.
 
 ---
 
 ### `screencast_stop`
 
-**Description:** Stops the active screencast recording on the selected page. (requires flag: --experimentalScreencast=true)
+**Description:** Stops the active screencast recording on the target page. (requires flag: --experimentalScreencast=true)
 
-**Parameters:** None
+**Parameters:**
+
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 
 ---
 
@@ -469,11 +498,12 @@ in the DevTools Elements panel (if any).
 
 ### `take_heapsnapshot`
 
-**Description:** Capture a heap snapshot of the currently selected page. Use to analyze the memory distribution of JavaScript objects and debug memory leaks.
+**Description:** Capture a heap snapshot of the target page. Use to analyze the memory distribution of JavaScript objects and debug memory leaks.
 
 **Parameters:**
 
 - **filePath** (string) **(required)**: A path to a .heapsnapshot file to save the heapsnapshot to.
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 
 ---
 
@@ -560,9 +590,9 @@ in the DevTools Elements panel (if any).
 - **filePath** (string) **(required)**: A path to a .heapsnapshot file to read.
 - **nodeId** (number) **(required)**: The node ID to get outgoing edges for.
 - **excludePrimitives** (boolean) _(optional)_: Whether to exclude primitive target nodes. Default is true.
-- **minRetainedSize** (number) _(optional)_: Minimum retained size in bytes for target nodes.
 - **pageIdx** (number) _(optional)_: The page index for pagination.
 - **pageSize** (number) _(optional)_: The page size for pagination.
+- **retainedSize** (string) _(optional)_: Inclusive retained size range (e.g. "1MB-2MB", "-1MB", or "1MB-") for target nodes. A single value is treated as a minimum. Currently, only the lower bound is applied.
 - **sortBy** (enum: "retainedSize", "selfSize", "name") _(optional)_: Sort order for edges. Default is retainedSize.
 
 ---
@@ -615,6 +645,25 @@ in the DevTools Elements panel (if any).
 
 ---
 
+### `query_heapsnapshot_objects`
+
+**Description:** Loads a memory heapsnapshot and queries objects matching specific filters (className, propertyName, nodeType, retainedSize, selfSize, isDetached, sortBy). (requires flag: --memoryDebugging=true)
+
+**Parameters:**
+
+- **filePath** (string) **(required)**: A path to a .heapsnapshot file to read.
+- **className** (string) _(optional)_: Optional regex or text matching object class name.
+- **isDetached** (boolean) _(optional)_: Whether to filter for detached DOM nodes.
+- **nodeType** (string) _(optional)_: Optional V8 node type filter (e.g. object, closure, string, array, code).
+- **pageIdx** (number) _(optional)_: The page index for pagination.
+- **pageSize** (number) _(optional)_: The page size for pagination.
+- **propertyName** (string) _(optional)_: Optional property name filter for outgoing reference edges.
+- **retainedSize** (string) _(optional)_: Inclusive retained size range (e.g. "1MB-2MB", "-1MB", or "1MB-"). A single value is treated as a minimum.
+- **selfSize** (string) _(optional)_: Inclusive self size range (e.g. "1MB-2MB", "-1MB", or "1MB-"). A single value is treated as a minimum.
+- **sortBy** (enum: "retainedSize", "selfSize", "id") _(optional)_: Sort order for results. Default is retainedSize.
+
+---
+
 ## Opera
 
 ### `opera_authenticate_mcp_server`
@@ -623,6 +672,7 @@ in the DevTools Elements panel (if any).
 
 **Parameters:**
 
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **server** (string) **(required)**: The MCP server name to authenticate.
 
 ---
@@ -633,6 +683,7 @@ in the DevTools Elements panel (if any).
 
 **Parameters:**
 
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **server** (string) **(required)**: The MCP server name (from [`opera_list_mcp_servers`](#opera_list_mcp_servers)).
 - **tool** (string) **(required)**: The tool name to execute on the server.
 - **parameters** (unknown) _(optional)_: Parameters to pass to the tool. Omit if the tool takes none.
@@ -645,6 +696,7 @@ in the DevTools Elements panel (if any).
 
 **Parameters:**
 
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **prompt** (string) **(required)**: The prompt to send to Opera AI.
 - **conversationId** (string) _(optional)_: Conversation ID to continue an existing conversation. Omit to start a new conversation.
 - **model** (string) _(optional)_: Model ID to use for the chat. Omit to use the browser default. Use [`opera_list_models`](#opera_list_models) to discover available IDs.
@@ -658,6 +710,7 @@ in the DevTools Elements panel (if any).
 
 **Parameters:**
 
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **server** (string) **(required)**: The MCP server name to connect.
 
 ---
@@ -668,6 +721,7 @@ in the DevTools Elements panel (if any).
 
 **Parameters:**
 
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **server** (string) **(required)**: The MCP server name to disable.
 
 ---
@@ -678,6 +732,7 @@ in the DevTools Elements panel (if any).
 
 **Parameters:**
 
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **prompt** (string) **(required)**: The action to perform, described in natural language.
 - **openFullTabView** (boolean) _(optional)_: When true, activate the created do tab so the user sees it immediately. Default false (tab created in the background). Only meaningful for headed sessions.
 
@@ -689,6 +744,7 @@ in the DevTools Elements panel (if any).
 
 **Parameters:**
 
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **server** (string) **(required)**: The MCP server name to enable.
 
 ---
@@ -697,7 +753,9 @@ in the DevTools Elements panel (if any).
 
 **Description:** List MCP servers registered in the browser, including their connection status. Only available when connected to Opera Neon.
 
-**Parameters:** None
+**Parameters:**
+
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 
 ---
 
@@ -707,6 +765,7 @@ in the DevTools Elements panel (if any).
 
 **Parameters:**
 
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **server** (string) **(required)**: The MCP server name (from [`opera_list_mcp_servers`](#opera_list_mcp_servers)).
 
 ---
@@ -715,7 +774,9 @@ in the DevTools Elements panel (if any).
 
 **Description:** List available AI models for Opera chat. Returns model IDs, display names, and which is the default. Only available when connected to Opera Neon.
 
-**Parameters:** None
+**Parameters:**
+
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 
 ---
 
@@ -725,6 +786,7 @@ in the DevTools Elements panel (if any).
 
 **Parameters:**
 
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **prompt** (string) **(required)**: Description of what to create or generate.
 - **conversationId** (string) _(optional)_: Conversation ID to continue an existing conversation. Omit to start a new conversation.
 - **openFullTabView** (boolean) _(optional)_: When true, activate the created make tab so the user sees it immediately. Default false (tab created in the background). Only meaningful for headed sessions.
@@ -737,6 +799,7 @@ in the DevTools Elements panel (if any).
 
 **Parameters:**
 
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **server** (string) **(required)**: The MCP server name to register.
 - **url** (string) **(required)**: The HTTP URL of the MCP server.
 
@@ -748,6 +811,7 @@ in the DevTools Elements panel (if any).
 
 **Parameters:**
 
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **prompt** (string) **(required)**: The topic or question to research.
 - **openFullTabView** (boolean) _(optional)_: When true, activate the created research tab so the user sees it immediately. Default false (tab created in the background). Only meaningful for headed sessions.
 - **researchType** (enum: "local", "one-minute", "deep") _(optional)_: Depth of research. "local" uses only on-page context, "one-minute" performs a quick web search, "deep" performs a thorough multi-source search.
@@ -760,6 +824,7 @@ in the DevTools Elements panel (if any).
 
 **Parameters:**
 
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **server** (string) **(required)**: The MCP server name to unregister.
 
 ---
@@ -826,6 +891,7 @@ in the DevTools Elements panel (if any).
 
 **Parameters:**
 
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **toolName** (string) **(required)**: The name of the tool to execute
 - **params** (string) _(optional)_: The JSON-stringified parameters to pass to the tool
 
@@ -841,7 +907,9 @@ following command to the script:
 This might be helpful when the third-party developer tools return non-serializable values or when composing
 third-party developer tools with additional functionality. (requires flag: --categoryExperimentalThirdParty=true)
 
-**Parameters:** None
+**Parameters:**
+
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 
 ---
 
@@ -855,6 +923,7 @@ third-party developer tools with additional functionality. (requires flag: --cat
 
 **Parameters:**
 
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 - **toolName** (string) **(required)**: The name of the WebMCP tool to execute
 - **input** (string) _(optional)_: The JSON-stringified parameters to pass to the WebMCP tool
 
@@ -864,7 +933,9 @@ third-party developer tools with additional functionality. (requires flag: --cat
 
 **Description:** Lists all WebMCP tools the page exposes. (requires flag: --categoryExperimentalWebmcp=true)
 
-**Parameters:** None
+**Parameters:**
+
+- **pageId** (number) **(required)**: Targets a specific page by ID.
 
 ---
 

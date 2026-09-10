@@ -11,7 +11,10 @@ import {afterEach, describe, it} from 'node:test';
 import type {Dialog} from 'puppeteer-core';
 import sinon from 'sinon';
 
-import type {ParsedArguments} from '../../src/bin/chrome-devtools-mcp-cli-options.js';
+import {
+  parseArguments,
+  type ParsedArguments,
+} from '../../src/config/mcp-options.js';
 import {
   listPages,
   newPage,
@@ -249,6 +252,137 @@ describe('pages', () => {
         assert.ok(response.includePages);
       });
     });
+    it('throws when navigating to a javascript URL and javascriptEvaluation is false', async () => {
+      await withMcpContext(async (response, context) => {
+        const disabledArgs = parseArguments(
+          '1.0.0',
+          ['node', 'script.js', '--no-javascript-evaluation'],
+          {CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: 'true'},
+        );
+        const tool = newPage(disabledArgs);
+        await assert.rejects(
+          async () => {
+            await tool.handler(
+              {params: {url: 'javascript:alert(1)'}},
+              response,
+              context,
+            );
+          },
+          {
+            message:
+              'Navigating to javascript: URLs is not allowed when JavaScript evaluation is disabled.',
+          },
+        );
+        await assert.rejects(
+          async () => {
+            await tool.handler(
+              {params: {url: 'data:text/html,<div>test</div>'}},
+              response,
+              context,
+            );
+          },
+          {
+            message:
+              'Navigating to data: URLs is not allowed when JavaScript evaluation is disabled.',
+          },
+        );
+        await assert.rejects(
+          async () => {
+            await tool.handler(
+              {params: {url: 'vbscript:msgbox(1)'}},
+              response,
+              context,
+            );
+          },
+          {
+            message:
+              'Navigating to vbscript: URLs is not allowed when JavaScript evaluation is disabled.',
+          },
+        );
+      });
+    });
+    it('throws when URL does not parse with new URL', async () => {
+      await withMcpContext(async (response, context) => {
+        const tool = newPage();
+        await assert.rejects(
+          async () => {
+            await tool.handler(
+              {params: {url: 'not a valid url'}},
+              response,
+              context,
+            );
+          },
+          {
+            message:
+              'Invalid URL: "not a valid url". URLs must be valid according to the URL standard.',
+          },
+        );
+      });
+    });
+    it('rejects chrome: and chrome-untrusted: URLs', async () => {
+      await withMcpContext(async (response, context) => {
+        const tool = newPage();
+        await assert.rejects(
+          async () => {
+            await tool.handler(
+              {params: {url: 'chrome://settings'}},
+              response,
+              context,
+            );
+          },
+          {
+            message: 'Navigating to chrome: URLs is not allowed.',
+          },
+        );
+        await assert.rejects(
+          async () => {
+            await tool.handler(
+              {params: {url: 'chrome-untrusted://terminal'}},
+              response,
+              context,
+            );
+          },
+          {
+            message: 'Navigating to chrome-untrusted: URLs is not allowed.',
+          },
+        );
+        assert.strictEqual(context.getPages().length, 1);
+      });
+    });
+    it('rejects chrome-extension: URLs unless categoryExtensions is enabled', async () => {
+      await withMcpContext(async (response, context) => {
+        const tool = newPage();
+        await assert.rejects(
+          async () => {
+            await tool.handler(
+              {params: {url: 'chrome-extension://abcdef/popup.html'}},
+              response,
+              context,
+            );
+          },
+          {
+            message:
+              'Navigating to chrome-extension: URLs is not allowed without --categoryExtensions.',
+          },
+        );
+      });
+    });
+    it('allows chrome://newtab/', async () => {
+      await withMcpContext(async (response, context) => {
+        const tool = newPage();
+        await tool.handler(
+          {params: {url: 'chrome://newtab/'}},
+          response,
+          context,
+        );
+        assert.ok(
+          context
+            .getSelectedMcpPage()
+            .pptrPage.url()
+            .startsWith('chrome://new'),
+        );
+      });
+    });
     it('create a page in the background', async () => {
       await withMcpContext(async (response, context) => {
         const originalPage = context.getPageById(1);
@@ -292,6 +426,38 @@ describe('pages', () => {
         );
         const mcpPage = context.getSelectedMcpPage();
         assert.strictEqual(mcpPage.isolatedContextName, 'session-a');
+        assert.ok(response.includePages);
+      });
+    });
+
+    it('keeps focus when background is true with isolatedContext', async () => {
+      await withMcpContext(async (response, context) => {
+        const originalPage = context.getPageById(1);
+        assert.strictEqual(originalPage, context.getSelectedMcpPage());
+        // Ensure original page has focus
+        await originalPage.pptrPage.bringToFront();
+        assert.strictEqual(
+          await originalPage.pptrPage.evaluate(() => document.hasFocus()),
+          true,
+        );
+        await newPage().handler(
+          {
+            params: {
+              url: 'data:text/html,<html></html>',
+              background: true,
+              isolatedContext: 'session-a',
+            },
+          },
+          response,
+          context,
+        );
+        // New page should be selected but original should retain focus
+        const mcpPage = context.getSelectedMcpPage();
+        assert.strictEqual(mcpPage.isolatedContextName, 'session-a');
+        assert.strictEqual(
+          await originalPage.pptrPage.evaluate(() => document.hasFocus()),
+          true,
+        );
         assert.ok(response.includePages);
       });
     });
@@ -811,6 +977,8 @@ describe('pages', () => {
             });
           </script>`,
         );
+        // Grant user activation so Chrome permits the beforeunload dialog
+        await page.mouse.click(10, 10);
 
         await navigatePage().handler(
           {params: {type: 'reload'}, page: context.getSelectedMcpPage()},
@@ -838,6 +1006,8 @@ describe('pages', () => {
             });
           </script>`,
         );
+        // Grant user activation so Chrome permits the beforeunload dialog
+        await page.mouse.click(10, 10);
 
         await navigatePage().handler(
           {
@@ -914,6 +1084,186 @@ describe('pages', () => {
         });
 
         assert.ok(response.includePages);
+      });
+    });
+
+    it('omits initScript from schema when javascriptEvaluation is false', () => {
+      const defaultTool = navigatePage();
+      assert.strictEqual('initScript' in defaultTool.schema, true);
+
+      const disabledArgs = parseArguments(
+        '1.0.0',
+        ['node', 'script.js', '--no-javascript-evaluation'],
+        {CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: 'true'},
+      );
+      const disabledTool = navigatePage(disabledArgs);
+      assert.strictEqual('initScript' in disabledTool.schema, false);
+    });
+
+    it('throws when navigating to a javascript, data, or vbscript URL and javascriptEvaluation is false', async () => {
+      await withMcpContext(async (response, context) => {
+        const disabledArgs = parseArguments(
+          '1.0.0',
+          ['node', 'script.js', '--no-javascript-evaluation'],
+          {CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: 'true'},
+        );
+        const tool = navigatePage(disabledArgs);
+        await assert.rejects(
+          async () => {
+            await tool.handler(
+              {
+                params: {
+                  url: 'javascript:alert(1)',
+                },
+                page: context.getSelectedMcpPage(),
+              },
+              response,
+              context,
+            );
+          },
+          {
+            message:
+              'Navigating to javascript: URLs is not allowed when JavaScript evaluation is disabled.',
+          },
+        );
+        await assert.rejects(
+          async () => {
+            await tool.handler(
+              {
+                params: {
+                  url: 'data:text/html,<div>test</div>',
+                },
+                page: context.getSelectedMcpPage(),
+              },
+              response,
+              context,
+            );
+          },
+          {
+            message:
+              'Navigating to data: URLs is not allowed when JavaScript evaluation is disabled.',
+          },
+        );
+        await assert.rejects(
+          async () => {
+            await tool.handler(
+              {
+                params: {
+                  url: 'vbscript:msgbox(1)',
+                },
+                page: context.getSelectedMcpPage(),
+              },
+              response,
+              context,
+            );
+          },
+          {
+            message:
+              'Navigating to vbscript: URLs is not allowed when JavaScript evaluation is disabled.',
+          },
+        );
+      });
+    });
+
+    it('throws when URL does not parse with new URL', async () => {
+      await withMcpContext(async (response, context) => {
+        const tool = navigatePage();
+        await assert.rejects(
+          async () => {
+            await tool.handler(
+              {
+                params: {
+                  url: 'not a valid url',
+                },
+                page: context.getSelectedMcpPage(),
+              },
+              response,
+              context,
+            );
+          },
+          {
+            message:
+              'Invalid URL: "not a valid url". URLs must be valid according to the URL standard.',
+          },
+        );
+      });
+    });
+
+    it('rejects chrome: and chrome-untrusted: URLs', async () => {
+      await withMcpContext(async (response, context) => {
+        const tool = navigatePage();
+        await assert.rejects(
+          async () => {
+            await tool.handler(
+              {
+                params: {url: 'chrome://settings'},
+                page: context.getSelectedMcpPage(),
+              },
+              response,
+              context,
+            );
+          },
+          {
+            message: 'Navigating to chrome: URLs is not allowed.',
+          },
+        );
+        await assert.rejects(
+          async () => {
+            await tool.handler(
+              {
+                params: {url: 'chrome-untrusted://terminal'},
+                page: context.getSelectedMcpPage(),
+              },
+              response,
+              context,
+            );
+          },
+          {
+            message: 'Navigating to chrome-untrusted: URLs is not allowed.',
+          },
+        );
+      });
+    });
+
+    it('rejects chrome-extension: URLs unless categoryExtensions is enabled', async () => {
+      await withMcpContext(async (response, context) => {
+        const tool = navigatePage();
+        await assert.rejects(
+          async () => {
+            await tool.handler(
+              {
+                params: {url: 'chrome-extension://abcdef/popup.html'},
+                page: context.getSelectedMcpPage(),
+              },
+              response,
+              context,
+            );
+          },
+          {
+            message:
+              'Navigating to chrome-extension: URLs is not allowed without --categoryExtensions.',
+          },
+        );
+      });
+    });
+
+    it('allows chrome://newtab/', async () => {
+      await withMcpContext(async (response, context) => {
+        const tool = navigatePage();
+        await tool.handler(
+          {
+            params: {url: 'chrome://newtab/'},
+            page: context.getSelectedMcpPage(),
+          },
+          response,
+          context,
+        );
+        assert.ok(
+          context
+            .getSelectedMcpPage()
+            .pptrPage.url()
+            .startsWith('chrome://new'),
+        );
       });
     });
 
@@ -1077,39 +1427,46 @@ describe('pages', () => {
       });
     });
 
-    it('resize when window state is fullscreen', async () => {
-      await withMcpContext(async (response, context) => {
-        const page = context.getSelectedMcpPage().pptrPage;
-        const browser = page.browser();
-        const windowId = await page.windowId();
-        await browser.setWindowBounds(windowId, {windowState: 'fullscreen'});
+    /*
+     * The following test fails after the release of chrome 152.
+     * */
+    it(
+      'resize when window state is fullscreen',
+      {skip: process.platform === 'darwin'},
+      async () => {
+        await withMcpContext(async (response, context) => {
+          const page = context.getSelectedMcpPage().pptrPage;
+          const browser = page.browser();
+          const windowId = await page.windowId();
+          await browser.setWindowBounds(windowId, {windowState: 'fullscreen'});
 
-        const {windowState} = await browser.getWindowBounds(windowId);
-        assert.strictEqual(windowState, 'fullscreen');
+          const {windowState} = await browser.getWindowBounds(windowId);
+          assert.strictEqual(windowState, 'fullscreen');
 
-        const resizePromise = page.evaluate(() => {
-          return new Promise(resolve => {
-            window.addEventListener('resize', resolve, {once: true});
+          const resizePromise = page.evaluate(() => {
+            return new Promise(resolve => {
+              window.addEventListener('resize', resolve, {once: true});
+            });
           });
+          await resizePage.handler(
+            {
+              params: {width: 850, height: 650},
+              page: context.getSelectedMcpPage(),
+            },
+            response,
+            context,
+          );
+          await resizePromise;
+          await page.waitForFunction(
+            () => window.innerWidth === 850 && window.innerHeight === 650,
+          );
+          const dimensions = await page.evaluate(() => {
+            return [window.innerWidth, window.innerHeight];
+          });
+          assert.deepStrictEqual(dimensions, [850, 650]);
         });
-        await resizePage.handler(
-          {
-            params: {width: 850, height: 650},
-            page: context.getSelectedMcpPage(),
-          },
-          response,
-          context,
-        );
-        await resizePromise;
-        await page.waitForFunction(
-          () => window.innerWidth === 850 && window.innerHeight === 650,
-        );
-        const dimensions = await page.evaluate(() => {
-          return [window.innerWidth, window.innerHeight];
-        });
-        assert.deepStrictEqual(dimensions, [850, 650]);
-      });
-    });
+      },
+    );
 
     it('when dialog is open', async t => {
       await withMcpContext(async (response, context) => {
@@ -1331,7 +1688,7 @@ describe('pages', () => {
         // @ts-expect-error _tabId is internal.
         page._tabId = 'test-tab-id';
         await getTabId.handler(
-          {params: {pageId: 1}, page: context.getSelectedMcpPage()},
+          {params: {}, page: context.getSelectedMcpPage()},
           response,
           context,
         );

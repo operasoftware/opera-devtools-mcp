@@ -12,7 +12,7 @@ import {pathToFileURL} from 'node:url';
 
 import sinon from 'sinon';
 
-import {parseArguments} from '../src/bin/chrome-devtools-mcp-cli-options.js';
+import {parseArguments} from '../src/config/mcp-options.js';
 import {McpContext} from '../src/McpContext.js';
 import {McpPage} from '../src/McpPage.js';
 import {McpResponse} from '../src/McpResponse.js';
@@ -23,8 +23,10 @@ import {ToolHandler} from '../src/ToolHandler.js';
 import {ToolCategory} from '../src/tools/categories.js';
 import type {
   DefinedPageTool,
+  DevToolsData,
   ToolDefinition,
 } from '../src/tools/ToolDefinition.js';
+import {createTools} from '../src/tools/tools.js';
 import {getMockBrowser} from './utils.js';
 import {Mutex} from '../src/third_party/index.js';
 
@@ -34,7 +36,51 @@ describe('ToolHandler', () => {
     ClearcutLogger.resetForTesting();
   });
 
-  it('calls page getter for page scoped tools', async () => {
+  it('calls getPageById for page scoped tools when pageId is provided', async () => {
+    let handlerCalled = false;
+    const tool: DefinedPageTool = {
+      name: 'page_tool',
+      description: 'A page scoped tool',
+      annotations: {
+        category: ToolCategory.INPUT,
+        readOnlyHint: false,
+      },
+      schema: {},
+      blockedByDialog: false,
+      verifyFilesSchema: {},
+      pageScoped: true,
+      handler: async () => {
+        handlerCalled = true;
+      },
+    };
+
+    const mockContext = sinon.createStubInstance(McpContext);
+    const mockProcess = sinon.createStubInstance(ChildProcess);
+    mockContext.browser = getMockBrowser({process: mockProcess});
+    const mockPage = sinon.createStubInstance(McpPage);
+    mockContext.getPageById.returns(mockPage);
+
+    const toolMutex = new Mutex();
+    const serverArgs = parseArguments('1.0.0', ['node', 'script.js'], {
+      CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: 'true',
+    });
+
+    const toolHandler = new ToolHandler(
+      tool,
+      serverArgs,
+      async () => mockContext,
+      toolMutex,
+    );
+
+    assert.strictEqual(toolHandler.shouldRegister, true);
+    await toolHandler.handle({pageId: 1});
+
+    assert.strictEqual(mockContext.getPageById.calledOnce, true);
+    assert.strictEqual(mockContext.getPageById.calledWith(1), true);
+    assert.strictEqual(handlerCalled, true);
+  });
+
+  it('calls getSelectedMcpPage for page scoped tools when pageIdRouting is disabled', async () => {
     let handlerCalled = false;
     const tool: DefinedPageTool = {
       name: 'page_tool',
@@ -59,9 +105,11 @@ describe('ToolHandler', () => {
     mockContext.getSelectedMcpPage.returns(mockPage);
 
     const toolMutex = new Mutex();
-    const serverArgs = parseArguments('1.0.0', ['node', 'script.js'], {
-      CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: 'true',
-    });
+    const serverArgs = parseArguments(
+      '1.0.0',
+      ['node', 'script.js', '--no-page-id-routing'],
+      {CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: 'true'},
+    );
 
     const toolHandler = new ToolHandler(
       tool,
@@ -114,13 +162,13 @@ describe('ToolHandler', () => {
     const result = await toolHandler.handle({});
 
     assert.strictEqual(mockContext.getDevToolsData.calledOnce, true);
-    assert.strictEqual(mockContext.getSelectedMcpPage.calledOnce, true);
+    assert.strictEqual(mockContext.getSelectedMcpPageUrl.calledOnce, true);
     assert.strictEqual(mockContext.getPageById.called, false);
     assert.strictEqual(handlerCalled, true);
     assert.strictEqual(result.isError, undefined);
   });
 
-  it('appends correct context to tool call logs', async () => {
+  it('passes devToolsData and pageUrl to logger', async () => {
     const baseTool: ToolDefinition = {
       name: 'test_tool',
       description: 'A test tool',
@@ -138,9 +186,8 @@ describe('ToolHandler', () => {
 
     const testCases: Array<{
       tool: ToolDefinition | DefinedPageTool;
-      devToolsData: Record<string, unknown>;
+      devToolsData: DevToolsData;
       pageUrl?: string;
-      expectedContext: Record<string, unknown>;
     }> = [
       {
         tool: {
@@ -150,13 +197,6 @@ describe('ToolHandler', () => {
         },
         devToolsData: {cdpBackendNodeId: 1},
         pageUrl: 'http://localhost:9222/',
-        expectedContext: {
-          is_devtools_open: true,
-          is_localhost: true,
-          devtools_data: {
-            is_dom_element_selected: true,
-          },
-        },
       },
       {
         tool: {
@@ -165,9 +205,6 @@ describe('ToolHandler', () => {
         },
         devToolsData: {},
         pageUrl: undefined,
-        expectedContext: {
-          is_devtools_open: false,
-        },
       },
     ];
 
@@ -182,13 +219,7 @@ describe('ToolHandler', () => {
       mockContext.browser = getMockBrowser({process: mockProcess});
       mockContext.getDevToolsData.resolves(testCase.devToolsData);
       if (testCase.pageUrl) {
-        const mockPage = {
-          pptrPage: {
-            isClosed: () => false,
-            url: () => testCase.pageUrl,
-          },
-        } as unknown as McpPage;
-        mockContext.getSelectedMcpPage.returns(mockPage);
+        mockContext.getSelectedMcpPageUrl.returns(testCase.pageUrl);
       }
 
       const logSpy = sinon.spy();
@@ -212,9 +243,10 @@ describe('ToolHandler', () => {
 
       assert.strictEqual(logSpy.calledOnce, true);
       assert.deepStrictEqual(
-        logSpy.firstCall.args[0].context,
-        testCase.expectedContext,
+        logSpy.firstCall.args[0].devToolsData,
+        testCase.devToolsData,
       );
+      assert.strictEqual(logSpy.firstCall.args[0].pageUrl, testCase.pageUrl);
       assert.strictEqual(handlerCalled, true);
 
       sinon.restore();
@@ -312,6 +344,124 @@ describe('ToolHandler', () => {
       /is currently disabled/,
     );
     assert.strictEqual(handlerCalled, false);
+  });
+
+  it('registers evaluate_script by default and disables it when javascriptEvaluation is false', async () => {
+    const mockContext = sinon.createStubInstance(McpContext);
+    const toolMutex = new Mutex();
+
+    const defaultServerArgs = parseArguments('1.0.0', ['node', 'script.js'], {
+      CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: 'true',
+    });
+    const defaultTool = createTools(defaultServerArgs).find(
+      t => t.name === 'evaluate_script',
+    );
+    if (!defaultTool) {
+      assert.fail('evaluate_script not found');
+    }
+    const defaultHandler = new ToolHandler(
+      defaultTool,
+      defaultServerArgs,
+      async () => mockContext,
+      toolMutex,
+    );
+    assert.strictEqual(defaultHandler.shouldRegister, true);
+
+    const disabledServerArgs = parseArguments(
+      '1.0.0',
+      ['node', 'script.js', '--no-javascript-evaluation'],
+      {CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: 'true'},
+    );
+    const disabledTool = createTools(disabledServerArgs).find(
+      t => t.name === 'evaluate_script',
+    );
+    if (!disabledTool) {
+      assert.fail('evaluate_script not found');
+    }
+    const disabledHandler = new ToolHandler(
+      disabledTool,
+      disabledServerArgs,
+      async () => mockContext,
+      toolMutex,
+    );
+    assert.strictEqual(disabledHandler.shouldRegister, false);
+
+    const disabledResult = await disabledHandler.handle({function: '() => 1'});
+    assert.strictEqual(disabledResult.isError, true);
+    assert.match(
+      disabledResult.content[0].type === 'text'
+        ? disabledResult.content[0].text
+        : '',
+      /Tool evaluate_script requires flag --javascriptEvaluation and is currently disabled/,
+    );
+
+    const cliServerArgs = parseArguments(
+      '1.0.0',
+      ['node', 'script.js', '--no-javascript-evaluation', '--viaCli'],
+      {CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: 'true'},
+    );
+    const cliTool = createTools(cliServerArgs).find(
+      t => t.name === 'evaluate_script',
+    );
+    if (!cliTool) {
+      assert.fail('evaluate_script not found');
+    }
+    const cliHandler = new ToolHandler(
+      cliTool,
+      cliServerArgs,
+      async () => mockContext,
+      toolMutex,
+    );
+    assert.strictEqual(cliHandler.shouldRegister, true);
+    const cliResult = await cliHandler.handle({function: '() => 1'});
+    assert.strictEqual(cliResult.isError, true);
+    assert.match(
+      cliResult.content[0].type === 'text' ? cliResult.content[0].text : '',
+      /Tool evaluate_script requires flag --javascriptEvaluation and is currently disabled/,
+    );
+  });
+
+  it('disables slim evaluate tool when javascriptEvaluation is false', async () => {
+    const mockContext = sinon.createStubInstance(McpContext);
+    const toolMutex = new Mutex();
+
+    const defaultServerArgs = parseArguments(
+      '1.0.0',
+      ['node', 'script.js', '--slim'],
+      {CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: 'true'},
+    );
+    const defaultTool = createTools(defaultServerArgs).find(
+      t => t.name === 'evaluate',
+    );
+    if (!defaultTool) {
+      assert.fail('evaluate not found');
+    }
+    const defaultHandler = new ToolHandler(
+      defaultTool,
+      defaultServerArgs,
+      async () => mockContext,
+      toolMutex,
+    );
+    assert.strictEqual(defaultHandler.shouldRegister, true);
+
+    const disabledServerArgs = parseArguments(
+      '1.0.0',
+      ['node', 'script.js', '--slim', '--javascriptEvaluation=false'],
+      {CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: 'true'},
+    );
+    const disabledTool = createTools(disabledServerArgs).find(
+      t => t.name === 'evaluate',
+    );
+    if (!disabledTool) {
+      assert.fail('evaluate not found');
+    }
+    const disabledHandler = new ToolHandler(
+      disabledTool,
+      disabledServerArgs,
+      async () => mockContext,
+      toolMutex,
+    );
+    assert.strictEqual(disabledHandler.shouldRegister, false);
   });
 
   it('applies the redactNetworkHeaders flag to the response', async () => {
@@ -506,8 +656,9 @@ describe('ToolHandler', () => {
     });
   });
 
-  it('validates files specified in verifyFilesSchema', async () => {
+  it('validates files specified in verifyFilesSchema and rewrites input with validated paths/URLs', async () => {
     let handlerCalled = false;
+    let receivedParams: Record<string, unknown> | undefined;
     const tool: ToolDefinition = {
       name: 'file_tool',
       description: 'A tool requiring file validation',
@@ -524,15 +675,24 @@ describe('ToolHandler', () => {
         filePath: true,
         fileList: true,
       },
-      handler: async () => {
+      handler: async request => {
         handlerCalled = true;
+        receivedParams = request.params;
       },
     };
 
     const mockContext = sinon.createStubInstance(McpContext);
     const mockProcess = sinon.createStubInstance(ChildProcess);
     mockContext.browser = getMockBrowser({process: mockProcess});
-    mockContext.validatePath.resolves();
+    mockContext.validatePath.callsFake(async p => {
+      if (!p) {
+        return undefined;
+      }
+      return path.resolve(
+        '/canonical',
+        path.relative(path.resolve('/workspace'), p),
+      );
+    });
 
     const toolMutex = new Mutex();
     const serverArgs = parseArguments('1.0.0', ['node', 'script.js'], {
@@ -572,6 +732,14 @@ describe('ToolHandler', () => {
       mockContext.validatePath.calledWith(testListFile2),
       true,
     );
+    assert.deepStrictEqual(receivedParams, {
+      filePath: pathToFileURL(path.resolve('/canonical/url-file.txt')).href,
+      fileList: [
+        path.resolve('/canonical/list1.txt'),
+        path.resolve('/canonical/list2.txt'),
+        'https://example.com/remote.txt',
+      ],
+    });
   });
 
   it('returns error when file validation fails for verifyFilesSchema', async () => {
@@ -628,6 +796,7 @@ describe('ToolHandler', () => {
 
   it('validates verifyFilesSchema when local: true and browser is running locally via process', async () => {
     let handlerCalled = false;
+    let receivedParams: Record<string, unknown> | undefined;
     const tool: ToolDefinition = {
       name: 'upload_tool',
       description: 'A tool with local-only file verification',
@@ -645,15 +814,17 @@ describe('ToolHandler', () => {
           remote: false,
         },
       },
-      handler: async () => {
+      handler: async request => {
         handlerCalled = true;
+        receivedParams = request.params;
       },
     };
 
     const mockContext = sinon.createStubInstance(McpContext);
     const mockProcess = sinon.createStubInstance(ChildProcess);
     mockContext.browser = getMockBrowser({process: mockProcess});
-    mockContext.validatePath.resolves();
+    const canonicalPath = path.resolve('/canonical/workspace/upload.png');
+    mockContext.validatePath.resolves(canonicalPath);
 
     const toolMutex = new Mutex();
     const serverArgs = parseArguments('1.0.0', ['node', 'script.js'], {
@@ -675,10 +846,14 @@ describe('ToolHandler', () => {
     assert.strictEqual(result.isError, undefined);
     assert.strictEqual(handlerCalled, true);
     assert.strictEqual(mockContext.validatePath.calledOnceWith(testPath), true);
+    assert.deepStrictEqual(receivedParams, {
+      filePaths: [canonicalPath],
+    });
   });
 
   it('validates verifyFilesSchema when local: true and browser is connected to localhost wsEndpoint', async () => {
     let handlerCalled = false;
+    let receivedParams: Record<string, unknown> | undefined;
     const tool: ToolDefinition = {
       name: 'install_pwa_tool',
       description: 'PWA tool with local-only file verification',
@@ -695,8 +870,9 @@ describe('ToolHandler', () => {
           local: true,
         },
       },
-      handler: async () => {
+      handler: async request => {
         handlerCalled = true;
+        receivedParams = request.params;
       },
     };
 
@@ -704,7 +880,8 @@ describe('ToolHandler', () => {
     mockContext.browser = getMockBrowser({
       wsEndpoint: 'ws://127.0.0.1:9222/devtools/browser/test',
     });
-    mockContext.validatePath.resolves();
+    const canonicalBundlePath = path.resolve('/canonical/workspace/app.swbn');
+    mockContext.validatePath.resolves(canonicalBundlePath);
 
     const toolMutex = new Mutex();
     const serverArgs = parseArguments('1.0.0', ['node', 'script.js'], {
@@ -730,10 +907,14 @@ describe('ToolHandler', () => {
       mockContext.validatePath.calledOnceWith(bundlePath),
       true,
     );
+    assert.deepStrictEqual(receivedParams, {
+      installUrlOrBundleUrl: pathToFileURL(canonicalBundlePath).href,
+    });
   });
 
   it('skips local-only verifyFilesSchema when browser is remote', async () => {
     let handlerCalled = false;
+    let receivedParams: Record<string, unknown> | undefined;
     const tool: ToolDefinition = {
       name: 'upload_tool',
       description: 'A tool with local-only file verification',
@@ -751,8 +932,9 @@ describe('ToolHandler', () => {
           remote: false,
         },
       },
-      handler: async () => {
+      handler: async request => {
         handlerCalled = true;
+        receivedParams = request.params;
       },
     };
 
@@ -780,6 +962,9 @@ describe('ToolHandler', () => {
     assert.strictEqual(result.isError, undefined);
     assert.strictEqual(handlerCalled, true);
     assert.strictEqual(mockContext.validatePath.called, false);
+    assert.deepStrictEqual(receivedParams, {
+      filePaths: ['/remote/server/path.txt'],
+    });
   });
 
   it('skips local-only verifyFilesSchema when browser has no process', async () => {
@@ -879,6 +1064,7 @@ describe('ToolHandler', () => {
 
   it('validates verifyFilesSchema with true but skips local: true on remote browser', async () => {
     let handlerCalled = false;
+    let receivedParams: Record<string, unknown> | undefined;
     const tool: ToolDefinition = {
       name: 'hybrid_tool',
       description: 'A tool with both schema file verifications',
@@ -898,8 +1084,9 @@ describe('ToolHandler', () => {
           remote: false,
         },
       },
-      handler: async () => {
+      handler: async request => {
         handlerCalled = true;
+        receivedParams = request.params;
       },
     };
 
@@ -907,7 +1094,8 @@ describe('ToolHandler', () => {
     mockContext.browser = getMockBrowser({
       wsEndpoint: 'ws://remote-host.com:9222/devtools/browser/test',
     });
-    mockContext.validatePath.resolves();
+    const canonicalOutputPath = path.resolve('/canonical/output.json');
+    mockContext.validatePath.resolves(canonicalOutputPath);
 
     const toolMutex = new Mutex();
     const serverArgs = parseArguments('1.0.0', ['node', 'script.js'], {
@@ -933,6 +1121,10 @@ describe('ToolHandler', () => {
       mockContext.validatePath.calledOnceWith(outputPath),
       true,
     );
+    assert.deepStrictEqual(receivedParams, {
+      outputFile: canonicalOutputPath,
+      inputFile: '/remote/input.json',
+    });
   });
 
   it('returns error when file validation fails for local: true on local browser', async () => {
@@ -1053,5 +1245,70 @@ describe('ToolHandler', () => {
 
     await localToolHandler.handle({remoteFile: remotePath});
     assert.strictEqual(mockLocalContext.validatePath.called, false);
+  });
+
+  it('rewrites file paths in params for page scoped tools', async () => {
+    let receivedParams: Record<string, unknown> | undefined;
+    const tool: DefinedPageTool = {
+      name: 'page_file_tool',
+      description: 'A page scoped tool with file verification',
+      annotations: {
+        category: ToolCategory.DEBUGGING,
+        readOnlyHint: false,
+      },
+      schema: {
+        filePath: zod.string(),
+      },
+      blockedByDialog: false,
+      verifyFilesSchema: {
+        filePath: true,
+      },
+      pageScoped: true,
+      handler: async request => {
+        receivedParams = request.params;
+      },
+    };
+
+    const mockContext = sinon.createStubInstance(McpContext);
+    const mockProcess = sinon.createStubInstance(ChildProcess);
+    mockContext.browser = getMockBrowser({process: mockProcess});
+    mockContext.getDevToolsData.resolves({});
+    const mockPage = sinon.createStubInstance(McpPage);
+    mockPage.getDialog.returns(undefined);
+    sinon.stub(mockPage, 'networkConditions').get(() => undefined);
+    sinon.stub(mockPage, 'geolocation').get(() => undefined);
+    sinon.stub(mockPage, 'viewport').get(() => undefined);
+    sinon.stub(mockPage, 'userAgent').get(() => undefined);
+    sinon.stub(mockPage, 'colorScheme').get(() => undefined);
+    sinon.stub(mockPage, 'cpuThrottlingRate').get(() => 1);
+    mockContext.getSelectedMcpPage.returns(mockPage);
+    const canonicalFilePath = path.resolve('/canonical/output.png');
+    mockContext.validatePath.resolves(canonicalFilePath);
+
+    const toolMutex = new Mutex();
+    const serverArgs = parseArguments('1.0.0', ['node', 'script.js'], {
+      CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: 'true',
+    });
+
+    const toolHandler = new ToolHandler(
+      tool,
+      serverArgs,
+      async () => mockContext,
+      toolMutex,
+    );
+
+    const inputPath = path.resolve('/workspace/output.png');
+    const result = await toolHandler.handle({
+      filePath: inputPath,
+    });
+
+    assert.strictEqual(result.isError, undefined);
+    assert.strictEqual(
+      mockContext.validatePath.calledOnceWith(inputPath),
+      true,
+    );
+    assert.deepStrictEqual(receivedParams, {
+      filePath: canonicalFilePath,
+    });
   });
 });

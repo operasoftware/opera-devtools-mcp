@@ -6,7 +6,7 @@
 This document is the registry of every intentional divergence from upstream.
 `scripts/verify-upstream-seam.ts` enforces it: unregistered drift in an upstream-owned file fails CI.
 
-- Current fork base: `ec014d1` (upstream, v1.7.0).
+- Current fork base: `7a46acf` (upstream, v1.9.0).
 - Upstream remote: `git remote add upstream https://github.com/ChromeDevTools/chrome-devtools-mcp.git`
 
 ## Intake runbook
@@ -89,7 +89,9 @@ a result:
 | `src/daemon/utils.ts`                                          | App name + index script path from branding                                                                                                                                   | yes                               |
 | `src/utils/check-for-updates.ts`                               | Env key + cache dir from branding                                                                                                                                            | yes                               |
 | `src/bin/check-latest-version.ts`                              | Package name from branding (keep upstream's `getRegistry()`)                                                                                                                 | yes                               |
-| `src/bin/chrome-devtools-mcp-cli-options.ts`                   | Branding strings; `performanceCrux` + `usageStatistics` default/help text from `opera/policy.ts`                                                                             | yes                               |
+| `src/config/mcp-options.ts`                                    | Branding strings; `performanceCrux` + `usageStatistics` default/help text from `opera/policy.ts`                                                                             | yes                               |
+| `src/config/browser-options.ts`                                | Branding references (`REPO_URL`, `CACHE_DIR_NAME`, `MCP_BIN_NAME`) in the browser-option help text                                                                           | yes                               |
+| `src/config/category-options.ts`                               | Adds the `ToolCategory.OPERA` entry so the generated category flags include `categoryOpera`                                                                                  | yes                               |
 | `src/bin/chrome-devtools-mcp-main.ts`                          | Branding strings; calls `enforceTelemetryPolicy()` from `opera/policy.ts`                                                                                                    | yes                               |
 | `src/bin/chrome-devtools-mcp.ts`, `src/bin/chrome-devtools.ts` | Branding strings                                                                                                                                                             | yes                               |
 | `src/telemetry/transformation.ts`                              | Adds `ZodRecord` to the supported telemetry zod types (used by `parameters` on `opera_call_mcp_tool`); maps it to a `_count` metric                                          | yes                               |
@@ -104,16 +106,17 @@ These are name changes, not behaviour changes: the fork's binary, package and en
 so the assertion strings do too. A test that needs a behavioural change indicates the seam is in the
 wrong place.
 
-| Path                                     | Divergence                                                                                                   |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `tests/utils.ts`                         | `CLI_PATH` and the daemon status strings use the Opera names                                                 |
-| `tests/index.test.ts`                    | Opera bin path + env var key                                                                                 |
-| `tests/cli.test.ts`                      | Opera package name; `performanceCrux`/`usageStatistics` expected to default to `false`                       |
-| `tests/utils/check-for-updates.test.ts`  | Opera env var key; drops upstream's downgrade case (see `src/utils/check-for-updates.ts`)                    |
-| `tests/daemon/utils.test.ts`             | `APP_NAME` uses the Opera package name                                                                       |
-| `tests/ToolHandler.test.ts`              | Opera env var keys, plus coverage for the `OperaToolHooks` seam                                              |
-| `tests/telemetry/transformation.test.ts` | Adds coverage for `ZodRecord` telemetry handling (count of record keys)                                      |
-| `tests/McpPage.test.ts`                  | Adds coverage for `resolveElementHandle` distinguishing a rejected lookup from a resolved-but-absent element |
+| Path                                        | Divergence                                                                                                     |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `tests/utils.ts`                            | `CLI_PATH` and the daemon status strings use the Opera names                                                   |
+| `tests/cli.test.ts`                         | Opera package name; `performanceCrux`/`usageStatistics` default to `false`; `categoryOpera` flag on by default |
+| `tests/index.test.ts`                       | Opera bin path + env var key                                                                                   |
+| `tests/utils/check-for-updates.test.ts`     | Opera env var key; drops upstream's downgrade case (see `src/utils/check-for-updates.ts`)                      |
+| `tests/daemon/utils.test.ts`                | `APP_NAME` uses the Opera package name                                                                         |
+| `tests/ToolHandler.test.ts`                 | Opera env var keys, plus coverage for the `OperaToolHooks` seam                                                |
+| `tests/telemetry/transformation.test.ts`    | Adds coverage for `ZodRecord` telemetry handling (count of record keys)                                        |
+| `tests/McpPage.test.ts`                     | Adds coverage for `resolveElementHandle` distinguishing a rejected lookup from a resolved-but-absent element   |
+| `tests/e2e/opera-devtools-commands.test.ts` | Inline assertion strings use `opera-devtools` binary name in restart-command suggestions                       |
 
 ### Upstream files we rename or delete
 
@@ -122,17 +125,19 @@ resolve by hand, keeping the Opera side. Git leaves upstream's copy in the tree 
 reflexive `git add -A` brings the file back — `npm run verify-upstream-seam` fails if any path in
 this table reappears.
 
-| Path                                                                                                                                                                                      | What we did                                                                     |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `tests/e2e/chrome-devtools-commands.test.ts`, `tests/e2e/chrome-devtools-disclaimers.test.ts`, `tests/e2e/chrome-devtools-start-stop.test.ts`, `tests/e2e/chrome-devtools-status.test.ts` | Renamed to `opera-devtools-*`; they drive the Opera-named bin                   |
-| `tests/e2e/telemetry.test.ts`                                                                                                                                                             | Deleted — Opera forces telemetry off, so there is no upload path left to assert |
-| `AGENTS.md`                                                                                                                                                                               | Deleted in favour of Opera's own agent docs                                     |
-| `server.json`, `scripts/verify-server-json-version.ts`, `.github/workflows/publish-to-mcp-registry-on-tag.yml`                                                                            | Deleted — the fork publishes to npm only, never to the MCP registry             |
+| Path                                                                                                                                                                                      | What we did                                                                         |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `tests/e2e/chrome-devtools-commands.test.ts`, `tests/e2e/chrome-devtools-disclaimers.test.ts`, `tests/e2e/chrome-devtools-start-stop.test.ts`, `tests/e2e/chrome-devtools-status.test.ts` | Renamed to `opera-devtools-*`; they drive the Opera-named bin                       |
+| `tests/e2e/telemetry.test.ts`                                                                                                                                                             | Deleted — Opera forces telemetry off, so there is no upload path left to assert     |
+| `AGENTS.md`                                                                                                                                                                               | Deleted in favour of Opera's own agent docs                                         |
+| `server.json`, `scripts/verify-server-json-version.ts`, `.github/workflows/publish-to-mcp-registry-on-tag.yml`                                                                            | Deleted — the fork publishes to npm only, never to the MCP registry                 |
+| `.release-please-manifest.json`, `release-please-config.json`                                                                                                                             | Deleted — the fork releases via its own publish-on-tag workflow, not release-please |
 
 ### Generated — never hand-merge, always regenerate
 
-`src/bin/chrome-devtools-cli-options.ts`, `src/telemetry/tool_call_metrics.json`,
-`src/telemetry/flag_usage_metrics.json`, `docs/tool-reference.md`, `package-lock.json`.
+`src/config/cli-options.ts`, `src/telemetry/tool_call_metrics.json`,
+`src/telemetry/flag_usage_metrics.json`, `docs/tool-reference.md`, `docs/configuration.md`,
+`package-lock.json`.
 
 ### Opera-owned prose / config (merge=opera-ours)
 
