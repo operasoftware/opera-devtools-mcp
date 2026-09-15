@@ -9,8 +9,9 @@ import crypto from 'node:crypto';
 import {describe, it, afterEach, beforeEach} from 'node:test';
 
 import {assertDaemonIsNotRunning, runCli} from '../utils.js';
+import {CLI_BIN_NAME} from '../../src/opera/branding.js';
 
-describe('opera-devtools', () => {
+describe(CLI_BIN_NAME, () => {
   let sessionId: string;
 
   beforeEach(async () => {

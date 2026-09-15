@@ -7,7 +7,10 @@
  */
 
 import assert from 'node:assert';
+import {after} from 'node:test';
 import {spawn, type ChildProcess} from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 import type {CallToolResult} from '@modelcontextprotocol/sdk/types.js';
@@ -25,6 +28,7 @@ import type {
 import sinon from 'sinon';
 
 import type {ParsedArguments} from '../src/config/mcp-options.js';
+import {CLI_BIN_NAME} from '../src/opera/branding.js';
 import {McpContext} from '../src/McpContext.js';
 import {McpResponse} from '../src/McpResponse.js';
 import {TextSnapshot} from '../src/TextSnapshot.js';
@@ -411,33 +415,82 @@ export function getMockBrowser(options?: {
   } as Browser;
 }
 
-export const CLI_PATH = path.resolve('build/src/bin/opera-devtools.js');
+export const CLI_PATH = path.resolve('build/src/bin', `${CLI_BIN_NAME}.js`);
+
+/**
+ * Build a clean environment for CLI/MCP child processes spawned in tests.
+ *
+ * The real `~/.opera-browser-cli/config` (and the `OPERA_CLI_*` env vars it
+ * promotes) would leak into tests: `applyEnvToArgv` would inject
+ * `--userDataDir` and `--headless=false`, which conflict with `--isolated`
+ * and cause "browser is already running" / "Connection closed" failures.
+ *
+ * This strips every `OPERA_CLI_*` var, points `HOME` at a throwaway temp dir
+ * (so `loadOperaCliConfig` finds no config file), and sets
+ * `OPERA_CLI_EXECUTABLE_PATH` to the bundled Puppeteer Chrome so the daemon
+ * can launch a headless browser without auto-detecting a real Opera install.
+ */
+const cliTestHome = fs.mkdtempSync(path.join(os.tmpdir(), 'opera-test-home-'));
+
+// One throwaway HOME per test process; hand it back when the file's tests end.
+after(() => {
+  fs.rmSync(cliTestHome, {recursive: true, force: true});
+});
+
+let cliExecutablePathCache: string | null | undefined;
+
+export async function createCliEnv(): Promise<Record<string, string>> {
+  if (cliExecutablePathCache === undefined) {
+    try {
+      cliExecutablePathCache = await puppeteer.executablePath();
+    } catch {
+      // No bundled browser: leave the var unset and let the child report it.
+      cliExecutablePathCache = null;
+    }
+  }
+
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value === undefined || key.startsWith('OPERA_CLI_')) {
+      continue;
+    }
+    env[key] = value;
+  }
+  env.HOME = cliTestHome;
+  if (cliExecutablePathCache) {
+    env.OPERA_CLI_EXECUTABLE_PATH = cliExecutablePathCache;
+  }
+  return env;
+}
 
 export async function runCli(
   args: string[],
   sessionId?: string,
 ): Promise<{status: number | null; stdout: string; stderr: string}> {
-  return new Promise((resolve, reject) => {
-    const finalArgs = [...args];
-    if (sessionId) {
-      finalArgs.push('--sessionId', sessionId);
-    }
-    const child = spawn('node', [CLI_PATH, ...finalArgs], {
-      env: process.env,
-    });
-    let stdout = '';
-    let stderr = '';
-    child.stdout.on('data', chunk => {
-      stdout += chunk;
-      process.stdout.write(chunk);
-    });
-    child.stderr.on('data', chunk => {
-      stderr += chunk;
-      process.stderr.write(chunk);
-    });
-    child.on('close', status => resolve({status, stdout, stderr}));
-    child.on('error', reject);
+  const env = await createCliEnv();
+  const {promise, resolve, reject} = Promise.withResolvers<{
+    status: number | null;
+    stdout: string;
+    stderr: string;
+  }>();
+  const finalArgs = [...args];
+  if (sessionId) {
+    finalArgs.push('--sessionId', sessionId);
+  }
+  const child = spawn('node', [CLI_PATH, ...finalArgs], {env});
+  let stdout = '';
+  let stderr = '';
+  child.stdout.on('data', chunk => {
+    stdout += chunk;
+    process.stdout.write(chunk);
   });
+  child.stderr.on('data', chunk => {
+    stderr += chunk;
+    process.stderr.write(chunk);
+  });
+  child.on('close', status => resolve({status, stdout, stderr}));
+  child.on('error', reject);
+  return promise;
 }
 
 export async function assertDaemonIsNotRunning(sessionId?: string) {

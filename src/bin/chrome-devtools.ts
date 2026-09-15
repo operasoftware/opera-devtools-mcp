@@ -27,6 +27,7 @@ import {
 } from '../daemon/utils.js';
 import {logDisclaimers} from '../index.js';
 import {CLI_BIN_NAME, MCP_BIN_NAME, PACKAGE_NAME} from '../opera/branding.js';
+import {withoutRoutingPageId} from '../opera/pageIdRouting.js';
 import {hideBin, yargs, type CallToolResult} from '../third_party/index.js';
 import {checkForUpdates} from '../utils/check-for-updates.js';
 import {VERSION} from '../version.js';
@@ -100,14 +101,14 @@ const y = yargs(hideBin(process.argv))
       ) {
         console.error('\n=========================================');
         console.error('💡 TIP FOR AI AGENT / DEVELOPER:');
-        console.error('In the `chrome-devtools` CLI:');
+        console.error(`In the \`${CLI_BIN_NAME}\` CLI:`);
         console.error(
           '1. Required parameters MUST be passed as positional arguments (without flags).',
         );
         console.error(
-          '   - INCORRECT: chrome-devtools click --pageId 1 --uid "1_2"',
+          `   - INCORRECT: ${CLI_BIN_NAME} click --pageId 1 --uid "1_2"`,
         );
-        console.error('   - CORRECT:   chrome-devtools click 1 "1_2"');
+        console.error(`   - CORRECT:   ${CLI_BIN_NAME} click 1 "1_2"`);
         console.error(
           '2. Optional parameters are passed as double-dash options/flags (e.g. --dblClick true).',
         );
@@ -115,7 +116,7 @@ const y = yargs(hideBin(process.argv))
           '3. Make sure to escape quotes properly for your shell environment.',
         );
         console.error(
-          'Run `chrome-devtools <command> --help` to see exact positional and optional parameters.',
+          `Run \`${CLI_BIN_NAME} <command> --help\` to see exact positional and optional parameters.`,
         );
         console.error('=========================================');
       }
@@ -185,7 +186,7 @@ y.command(
         console.log(`args=${JSON.stringify(data.args)}`);
         if (data.version !== VERSION) {
           console.warn(
-            `Warning: Daemon server version (${data.version}) does not match CLI version (${VERSION}). Run 'chrome-devtools start' to update and restart the daemon.`,
+            `Warning: Daemon server version (${data.version}) does not match CLI version (${VERSION}). Run '${CLI_BIN_NAME} start' to update and restart the daemon.`,
           );
         }
       } else {
@@ -214,7 +215,9 @@ y.command(
 );
 
 for (const [commandName, commandDef] of Object.entries(commands)) {
-  const args = commandDef.args;
+  // The CLI never routes by pageId: drop the routing positional that
+  // chrome-devtools-mcp injects onto page-scoped commands (src/opera/pageIdRouting.ts).
+  const args = withoutRoutingPageId(commandDef.args);
   const requiredArgNames = Object.keys(args).filter(
     name => args[name].required,
   );

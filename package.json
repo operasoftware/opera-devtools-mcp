@@ -5,7 +5,7 @@
   "type": "module",
   "bin": {
     "opera-devtools-mcp": "./build/src/bin/opera-devtools-mcp.js",
-    "opera-devtools": "./build/src/bin/opera-devtools.js"
+    "opera-browser-cli": "./build/src/bin/opera-browser-cli.js"
   },
   "main": "./build/src/index.js",
   "scripts": {
