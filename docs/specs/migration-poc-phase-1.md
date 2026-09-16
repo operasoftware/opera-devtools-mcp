@@ -1,9 +1,49 @@
 # Migration PoC — Phase 1a: Internal CLI Binary + Environment Variable Surface + First-Run Autoconfiguration
 
-**Status:** Design
+**Status:** Implemented (Phase 1a + the first-run autoconfiguration slice of 1b), verified against the working tree.
 **Author:** Senior Architect
 **Date:** 2026-09-15
+**Last reconciled with the tree:** 2026-09-16
 **Parent analysis:** `~/work/specs/opera-browser-cli-drop-feasibility-analysis.md`
+
+---
+
+## 0. Reconciliation status
+
+Checked against the tree on 2026-09-16, file by file:
+
+- **Every "New" file in §3.1 and §5.1 exists**, and every file marked **Deleted**
+  in §3.1 is gone (`src/bin/opera-devtools.ts`, `scripts/select-cli-name.ts`,
+  `src/opera/cli-name.generated.ts`).
+- **`docs/UPSTREAM.md` carries the registry rows** §3.4 asked for:
+  `src/bin/opera-browser-cli.ts` together with `src/bin/opera-devtools-mcp.ts`,
+  `src/opera/{envConfig,pageIdRouting,config,detect,profile}.ts`, and the
+  `tests/opera/*` suites. `src/bin/opera-devtools-cli-options.ts` is still
+  "Unchanged" as predicted.
+- **`npm run verify-upstream-seam` passes** (`62 upstream file(s) diverge, all
+registered`), so the seam bookkeeping this migration introduced is intact.
+- **`tests/utils.ts` shows the §3.2 divergence** (`CLI_PATH` resolves
+  `opera-browser-cli.js`; `createCliEnv()` strips `OPERA_CLI_*` and points `HOME`
+  at a throwaway directory).
+
+Two gaps, both recorded rather than silently absorbed:
+
+1. **`docs/architecture.md` was never written.** §3.1 lists it as a new
+   Opera-owned document; it is absent from the tree, and `docs/UPSTREAM.md`
+   still claims it in the Opera-owned prose list. Either write it (the
+   two-process model, the socket protocol, the two usage modes) or drop the row
+   from both documents — see §8.
+2. **`src/opera/envConfig.ts` gained one export after this document was
+   written:** `PERSISTENT_PROFILE_IGNORE_DEFAULT_ARGS`, so the process-lifecycle
+   stress suite can launch a persistent profile with exactly the flags
+   production reverts (see §4.1). No behaviour change; the constant was already
+   in the file.
+
+Later work that belongs to the same seam, already registered in
+`docs/UPSTREAM.md`: the process-lifecycle stress suite (`tests/stress/**`,
+`tests/stress/docker/**`, `scripts/stress-docker.js`, `.dockerignore`) and
+`docs/stress-testing.md`. It exercises the daemon/MCP/browser process model this
+migration produced; it does not change the migration surface.
 
 ---
 
@@ -93,7 +133,7 @@ No `scripts/select-cli-name.ts`, no `src/opera/cli-name.generated.ts`, no build-
 | `src/opera/cli-name.generated.ts`       | **Deleted** (and removed from `.gitignore`).                                                                                                         |
 | `scripts/prepare.ts`                    | `ensureCliNameGenerated()` **removed**. The function existed only to write the generated file.                                                       |
 | `src/bin/opera-devtools-cli-options.ts` | **Unchanged.** `opera-browser-cli` reuses the same options surface; no per-name `-cli-options.ts` fork is needed.                                    |
-| `docs/architecture.md`                  | **New** Opera-owned prose: the two-process CLI/daemon model, the socket protocol, the two usage modes.                                               |
+| `docs/architecture.md`                  | **New** Opera-owned prose: the two-process CLI/daemon model, the socket protocol, the two usage modes. **Not delivered** — see §0 and §8.            |
 
 ### 3.2 Tests
 
@@ -138,6 +178,12 @@ pageId strip of §4.7), that is a hand edit.
 ### 4.1 New file — `src/opera/envConfig.ts` (Opera-owned)
 
 Content is **physically moved** from `opera-browser-cli`, not rewritten. Filtered to Phase 1a scope.
+
+Added later, unchanged in behaviour: `PERSISTENT_PROFILE_IGNORE_DEFAULT_ARGS` is
+exported so `tests/stress/helpers.ts` can launch a persistent profile with the
+same reverted Puppeteer defaults this file injects in production (a mocked
+keychain or `--password-store=basic` launches a real profile logged out, and the
+component-extension blockers stop the Opera AI extension loading).
 
 | Symbol                          | Source in opera-browser-cli                                                                                       | Purpose                                                                                                                                                                                                                              |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -409,3 +455,7 @@ Post-implementation checklist:
 - **Phase 1d:** `doctor`, `logs`, `run`, `attach`, exit-code contract, `--full`/`--raw` flags.
 - **Phase 1e:** takeover workflow — unblocks `OPERA_CLI_TAKEOVER`. Requires new daemon-side API per feasibility analysis §2.3.
 - **Phase 3:** `opera-browser-cli` npm package deprecation + migration warnings.
+- **Outstanding from Phase 1a:** `docs/architecture.md` (the two-process
+  CLI/daemon model, the socket protocol, the two usage modes). Either write it or
+  remove it from §3.1 and from `docs/UPSTREAM.md`'s Opera-owned prose list — as
+  it stands both documents promise a file that is not in the tree.

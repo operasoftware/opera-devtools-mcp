@@ -1,0 +1,38 @@
+# Build-context pruning for tests/stress/docker/Dockerfile.
+#
+# This file has to sit at the *build context root*, which is the repository
+# root: the `docker build` in scripts/stress-docker.js, the compose file's
+# `context: ../../..` and the CI workflow all pass `.` as the context. Docker's
+# classic builder reads `.dockerignore` from there and nowhere else; only
+# BuildKit also honours a `<Dockerfile>.dockerignore` next to the Dockerfile,
+# and a buildx plugin is not installed everywhere (this repo's own machines
+# fall back to the classic builder, which would then ship the full 2.3 GB).
+#
+# Without this file every build ships ~2.3 GB to the daemon before the first
+# layer runs: .git (1.3 GB), the root node_modules (320 MB) and the
+# devtools-frontend submodule (655 MB).
+#
+# The image copies only `package.json`, `package-lock.json` and `build/` - the
+# host compiles the suite (see the Dockerfile header), so the source trees stay
+# out of the context entirely.
+.git
+**/.git
+.idea
+.github
+docs
+skills
+*.log
+stress-run.log
+
+# Root install only; the image runs its own `npm ci`.
+node_modules
+
+# Not copied: the image ships compiled output. Keeping this excluded is what
+# keeps the context at ~35 MB instead of ~490 MB.
+third_party
+
+# Not copied either: the tests and their helpers are already compiled into
+# build/tests/**, which `npm run build` regenerates before the image is built.
+src
+tests
+scripts

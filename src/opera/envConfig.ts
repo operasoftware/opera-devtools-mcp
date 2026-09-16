@@ -176,7 +176,7 @@ function hasArg(argv: string[], ...flags: string[]): boolean {
  * background default blockers stop the Opera AI extension from loading (so
  * `Opera.dispatchAction` has "no target" to dispatch to).
  */
-const PERSISTENT_PROFILE_IGNORE_DEFAULT_ARGS = [
+export const PERSISTENT_PROFILE_IGNORE_DEFAULT_ARGS = [
   '--use-mock-keychain',
   '--password-store=basic',
   '--disable-extensions',
