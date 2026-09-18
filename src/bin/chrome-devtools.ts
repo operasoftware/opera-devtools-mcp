@@ -27,6 +27,7 @@ import {
 } from '../daemon/utils.js';
 import {logDisclaimers} from '../index.js';
 import {CLI_BIN_NAME, MCP_BIN_NAME, PACKAGE_NAME} from '../opera/branding.js';
+import {describeBrowserMode} from '../opera/browserFlags.js';
 import {withoutRoutingPageId} from '../opera/pageIdRouting.js';
 import {hideBin, yargs, type CallToolResult} from '../third_party/index.js';
 import {checkForUpdates} from '../utils/check-for-updates.js';
@@ -183,6 +184,9 @@ y.command(
         console.log(
           `pid=${data.pid} socket=${data.socketPath} start-date=${data.startDate} version=${data.version}`,
         );
+        // Who owns the browser decides what recovery to expect from it: we
+        // relaunch what we launched, and never touch a browser we attached to.
+        console.log(`browser=${describeBrowserMode(data.args)}`);
         console.log(`args=${JSON.stringify(data.args)}`);
         if (data.version !== VERSION) {
           console.warn(

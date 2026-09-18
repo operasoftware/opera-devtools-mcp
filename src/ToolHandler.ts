@@ -5,7 +5,9 @@
  *
  * Modified by Opera Software AS: optional `hooks` seam (see
  * ./opera/toolHandlerHooks.ts) for mutex bypass, browser relaunch and log
- * streaming. Keep the diff to the three `this.hooks?.` call sites.
+ * streaming, plus one page-resolution call that tolerates a selection the user
+ * closed (see ./opera/pageRecovery.ts). Keep the diff to the three
+ * `this.hooks?.` call sites and that line.
  */
 
 import type {ParsedArguments} from './config/mcp-options.js';
@@ -14,6 +16,7 @@ import type {McpPage} from './McpPage.js';
 import type {DataFormat} from './McpResponse.js';
 import {McpResponse} from './McpResponse.js';
 import {CLI_BIN_NAME} from './opera/branding.js';
+import {resolveSelectedPage} from './opera/pageRecovery.js';
 import type {
   OperaToolHooks,
   ToolInvocationExtra,
@@ -274,7 +277,7 @@ export class ToolHandler {
             pageId !== undefined &&
             !this.serverArgs.slim
               ? context.getPageById(pageId)
-              : context.getSelectedMcpPage();
+              : await resolveSelectedPage(context, response);
           response.setPage(page);
           if (this.tool.blockedByDialog) {
             page.throwIfDialogOpen();

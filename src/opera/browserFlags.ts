@@ -65,13 +65,88 @@ export interface OperaBrowserControl {
 }
 
 /**
+ * One source of truth for "did we launch the browser, or attach to one that was
+ * already running". `index.ts` picks the branch with the same three options at
+ * invocation time, and the CLI reports the mode from the daemon's stored argv,
+ * so the rule must not be re-implemented per caller.
+ */
+const ATTACH_OPTIONS = ['browserUrl', 'wsEndpoint', 'autoConnect'] as const;
+
+/**
  * True when this server launched the browser itself. When the user attached to
  * an existing browser we must never kill and relaunch it.
  */
-function isLaunchMode(serverArgs: ServerArgs): boolean {
-  return (
-    !serverArgs.browserUrl && !serverArgs.wsEndpoint && !serverArgs.autoConnect
-  );
+export function isLaunchMode(serverArgs: ServerArgs): boolean {
+  return !ATTACH_OPTIONS.some(option => Boolean(serverArgs[option]));
+}
+
+/**
+ * One canonical spelling for a raw flag name. yargs expands `--browser-url` and
+ * `--browserUrl` to the same option, and the daemon stores the argv verbatim, so
+ * a read-back that does not normalize would call an attached session "launched".
+ */
+function canonicalOptionName(name: string): string {
+  return name.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());
+}
+
+/**
+ * The flags of a stored argv in one pass: canonical name → value, `true` for a
+ * value-less flag. `--flag=value`, `--flag value`, `--no-flag` and
+ * `--flag=false` all arrive on a real command line, and all four have to read
+ * the same as `isLaunchMode` reads the parsed form.
+ */
+function readFlags(args: readonly string[]): Map<string, string | boolean> {
+  const flags = new Map<string, string | boolean>();
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index]!;
+    if (!arg.startsWith('--')) {
+      continue;
+    }
+    const body = arg.slice(2);
+    const equals = body.indexOf('=');
+    if (equals !== -1) {
+      flags.set(
+        canonicalOptionName(body.slice(0, equals)),
+        body.slice(equals + 1),
+      );
+      continue;
+    }
+    if (body.startsWith('no-')) {
+      flags.set(canonicalOptionName(body.slice(3)), false);
+      continue;
+    }
+    const next = args[index + 1];
+    if (next !== undefined && !next.startsWith('-')) {
+      flags.set(canonicalOptionName(body), next);
+      index++;
+      continue;
+    }
+    flags.set(canonicalOptionName(body), true);
+  }
+  return flags;
+}
+
+/**
+ * How a serialized CLI argv (`opera-browser-cli status`) describes the browser
+ * it drives: `launched (owned by this daemon)` or `attached to <target>`.
+ *
+ * The daemon stores the MCP argv it was started with, so this needs no new
+ * channel between the two processes — and it is the same predicate the server
+ * itself applies, read back from the flags that decided it.
+ */
+export function describeBrowserMode(args: readonly string[]): string {
+  const flags = readFlags(args);
+  const attachFlag = ATTACH_OPTIONS.find(option => {
+    const value = flags.get(option);
+    // `--flag=false` and `--no-flag` are how yargs spells "not set", and
+    // `isLaunchMode` reads them the same way.
+    return value !== undefined && value !== false && value !== 'false';
+  });
+  if (!attachFlag) {
+    return 'launched (owned by this daemon)';
+  }
+  const value = flags.get(attachFlag);
+  return `attached to ${typeof value === 'string' && value ? value : 'an external browser'}`;
 }
 
 /**

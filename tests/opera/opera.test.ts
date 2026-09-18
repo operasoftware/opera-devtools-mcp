@@ -28,6 +28,11 @@ import {
   operaResearch,
   operaUnregisterMcpServer,
 } from '../../src/opera/tools/opera.js';
+import {
+  CDPSessionEvent,
+  ConnectionClosedError,
+  TargetCloseError,
+} from '../../src/third_party/index.js';
 
 /**
  * The Opera tools only touch `page.pptrPage._client()`, so they can be
@@ -81,7 +86,7 @@ class FakeCDPSession extends EventEmitter {
     return this.sent[index]?.params?.['payload'] as Record<string, unknown>;
   }
 
-  listenerCountFor(event: string): number {
+  listenerCountFor(event: string | symbol): number {
     return this.listenerCount(event);
   }
 }
@@ -400,6 +405,33 @@ describe('opera tools', () => {
       assert.deepStrictEqual(lines, ['done']);
     });
 
+    it('resolves when the action finishes before the dispatch reply is processed', async () => {
+      const session = new FakeCDPSession().resolveWith({correlationId: 'c1'});
+      const {response, lines, logs} = makeResponse();
+
+      operaDo.handler(makeRequest(session, {prompt: 'go'}), response, context);
+
+      // The browser answers in the same read as the dispatch reply, so these
+      // arrive before the reply names the correlationId they belong to.
+      session.emit('Opera.actionChunk', {correlationId: 'c1', chunk: 'step'});
+      session.emit('Opera.actionCompleted', {
+        correlationId: 'c1',
+        result: 'done',
+      });
+
+      // Turns, not a clock: the regression this guards is a call that never
+      // settles, so there is no event to await and a real delay would only
+      // blur "not yet" into "lost".
+      for (let i = 0; i < 1000 && lines.length === 0; i++) {
+        const {promise, resolve} = Promise.withResolvers<void>();
+        setImmediate(resolve);
+        await promise;
+      }
+
+      assert.deepStrictEqual(lines, ['done']);
+      assert.deepStrictEqual(logs, ['step']);
+    });
+
     it('ignores events for a different correlationId', async () => {
       const session = new FakeCDPSession().resolveWith({correlationId: 'mine'});
       const {response, lines, logs} = makeResponse();
@@ -453,6 +485,41 @@ describe('opera tools', () => {
       assert.strictEqual(session.listenerCountFor('Opera.actionChunk'), 0);
       assert.strictEqual(session.listenerCountFor('Opera.actionCompleted'), 0);
       assert.strictEqual(session.listenerCountFor('Opera.actionFailed'), 0);
+    });
+
+    it('reports a disconnect and removes its listeners when the session dies', async () => {
+      const session = new FakeCDPSession().resolveWith({correlationId: 'c1'});
+      const {response, lines} = makeResponse();
+
+      const pending = operaDo.handler(
+        makeRequest(session, {prompt: 'go'}),
+        response,
+        context,
+      );
+      await waitForStreamListeners(session);
+
+      // Puppeteer emits this Symbol from `CdpSession.onClosed()` when the
+      // browser dies. Without a listener the stream never settles, so the
+      // tool hangs until the caller's timeout.
+      session.emit(CDPSessionEvent.Disconnected);
+
+      await pending;
+
+      // A promise that settled without appending anything would otherwise fail
+      // below as a TypeError on an empty array, not as a readable assertion.
+      assert.ok(lines.length > 0, 'the failure must be reported to the caller');
+      assert.match(
+        lines[0]!,
+        /Opera\.dispatchWithStreamedResponse\(do\) failed/,
+      );
+      assert.match(lines[0]!, /CDP session disconnected/);
+      assert.strictEqual(session.listenerCountFor('Opera.actionChunk'), 0);
+      assert.strictEqual(session.listenerCountFor('Opera.actionCompleted'), 0);
+      assert.strictEqual(session.listenerCountFor('Opera.actionFailed'), 0);
+      assert.strictEqual(
+        session.listenerCountFor(CDPSessionEvent.Disconnected),
+        0,
+      );
     });
 
     it('reports a streamed failure without throwing', async () => {
@@ -1001,6 +1068,39 @@ describe('opera tools', () => {
         serviceWorkerRetryPolicy.maxAttempts,
       );
       assert.match(lines[0]!, /still down/);
+    });
+
+    it('does not retry a dead-browser dispatch error', async () => {
+      // The real class, not a name-alike: the predicate matches by class, so a
+      // string-only stand-in would pass here while Puppeteer's real error
+      // retried five times.
+      const closed = new TargetCloseError('Target closed');
+      const session = new FakeCDPSession().rejectWith(closed);
+      const {response, lines} = makeResponse();
+
+      await operaChat.handler(
+        makeRequest(session, {prompt: 'hi'}),
+        response,
+        context,
+      );
+
+      assert.strictEqual(session.sendCount, 1);
+      assert.match(lines[0]!, /Target closed/);
+    });
+
+    it('does not retry a closed connection on a streamed dispatch', async () => {
+      const closed = new ConnectionClosedError('Connection closed.');
+      const session = new FakeCDPSession().rejectWith(closed);
+      const {response, lines} = makeResponse();
+
+      await operaDo.handler(
+        makeRequest(session, {prompt: 'go'}),
+        response,
+        context,
+      );
+
+      assert.strictEqual(session.sendCount, 1);
+      assert.match(lines[0]!, /Connection closed\./);
     });
 
     it('retries the initial dispatch of a streamed action too', async () => {

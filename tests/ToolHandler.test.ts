@@ -22,6 +22,7 @@ import {zod} from '../src/third_party/index.js';
 import {ToolHandler} from '../src/ToolHandler.js';
 import {ToolCategory} from '../src/tools/categories.js';
 import type {
+  ContextPage,
   DefinedPageTool,
   DevToolsData,
   ToolDefinition,
@@ -123,6 +124,156 @@ describe('ToolHandler', () => {
 
     assert.strictEqual(mockContext.getSelectedMcpPage.calledOnce, true);
     assert.strictEqual(handlerCalled, true);
+  });
+
+  it('recovers the page for a page scoped tool whose selection the user closed', async () => {
+    let receivedPage: ContextPage | undefined;
+    const tool: DefinedPageTool = {
+      name: 'page_tool',
+      description: 'A page scoped tool',
+      annotations: {
+        category: ToolCategory.INPUT,
+        readOnlyHint: false,
+      },
+      schema: {},
+      blockedByDialog: false,
+      verifyFilesSchema: {},
+      pageScoped: true,
+      handler: async request => {
+        receivedPage = request.page;
+      },
+    };
+
+    const mockContext = sinon.createStubInstance(McpContext);
+    const mockProcess = sinon.createStubInstance(ChildProcess);
+    mockContext.browser = getMockBrowser({process: mockProcess});
+    // The selection the user closed: the strict accessor throws once, the page
+    // list replaces it, and the second resolution succeeds.
+    const recovered = sinon.createStubInstance(McpPage);
+    mockContext.getSelectedMcpPage.onFirstCall().throws(new Error('closed'));
+    mockContext.getSelectedMcpPage.onSecondCall().returns(recovered);
+
+    const toolMutex = new Mutex();
+    const serverArgs = parseArguments(
+      '1.0.0',
+      ['node', 'script.js', '--no-page-id-routing'],
+      {CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: 'true'},
+    );
+
+    const toolHandler = new ToolHandler(
+      tool,
+      serverArgs,
+      async () => mockContext,
+      toolMutex,
+    );
+
+    await toolHandler.handle({});
+
+    assert.strictEqual(mockContext.createPagesSnapshot.calledOnce, true);
+    assert.strictEqual(mockContext.newPage.called, false);
+    assert.strictEqual(receivedPage, recovered);
+  });
+
+  it('opens a page for a page scoped tool when the browser has none', async () => {
+    let receivedPage: ContextPage | undefined;
+    const tool: DefinedPageTool = {
+      name: 'page_tool',
+      description: 'A page scoped tool',
+      annotations: {
+        category: ToolCategory.INPUT,
+        readOnlyHint: false,
+      },
+      schema: {},
+      blockedByDialog: false,
+      verifyFilesSchema: {},
+      pageScoped: true,
+      handler: async request => {
+        receivedPage = request.page;
+      },
+    };
+
+    const mockContext = sinon.createStubInstance(McpContext);
+    const mockProcess = sinon.createStubInstance(ChildProcess);
+    mockContext.browser = getMockBrowser({process: mockProcess});
+    // Nothing to select, at all: the browser the user closed the tabs of.
+    mockContext.getSelectedMcpPage.throws(new Error('closed'));
+    mockContext.getDevToolsData.resolves({});
+    const opened = sinon.createStubInstance(McpPage);
+    opened.getDialog.returns(undefined);
+    sinon.stub(opened, 'networkConditions').get(() => undefined);
+    sinon.stub(opened, 'geolocation').get(() => undefined);
+    sinon.stub(opened, 'viewport').get(() => undefined);
+    sinon.stub(opened, 'userAgent').get(() => undefined);
+    sinon.stub(opened, 'colorScheme').get(() => undefined);
+    sinon.stub(opened, 'cpuThrottlingRate').get(() => 1);
+    mockContext.newPage.resolves(opened);
+
+    const toolMutex = new Mutex();
+    const serverArgs = parseArguments(
+      '1.0.0',
+      ['node', 'script.js', '--no-page-id-routing'],
+      {CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: 'true'},
+    );
+
+    const toolHandler = new ToolHandler(
+      tool,
+      serverArgs,
+      async () => mockContext,
+      toolMutex,
+    );
+
+    const result = await toolHandler.handle({});
+
+    assert.strictEqual(mockContext.newPage.calledOnce, true);
+    assert.strictEqual(receivedPage, opened);
+    assert.match(
+      JSON.stringify(result.content),
+      /had no open pages, so a new one was opened/,
+    );
+  });
+
+  it('does not recover a page the caller named explicitly', async () => {
+    const tool: DefinedPageTool = {
+      name: 'page_tool',
+      description: 'A page scoped tool',
+      annotations: {
+        category: ToolCategory.INPUT,
+        readOnlyHint: false,
+      },
+      schema: {},
+      blockedByDialog: false,
+      verifyFilesSchema: {},
+      pageScoped: true,
+      handler: async () => {
+        // The assertion is about which page was resolved, not about the body.
+      },
+    };
+
+    const mockContext = sinon.createStubInstance(McpContext);
+    const mockProcess = sinon.createStubInstance(ChildProcess);
+    mockContext.browser = getMockBrowser({process: mockProcess});
+    const named = sinon.createStubInstance(McpPage);
+    mockContext.getPageById.returns(named);
+
+    const toolMutex = new Mutex();
+    const serverArgs = parseArguments('1.0.0', ['node', 'script.js'], {
+      CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: 'true',
+    });
+
+    const toolHandler = new ToolHandler(
+      tool,
+      serverArgs,
+      async () => mockContext,
+      toolMutex,
+    );
+
+    await toolHandler.handle({pageId: 2});
+
+    // A page the caller named that no longer exists is their error to see: a
+    // recovery page here would silently redirect the call to another tab.
+    assert.strictEqual(mockContext.getPageById.calledWith(2), true);
+    assert.strictEqual(mockContext.createPagesSnapshot.called, false);
+    assert.strictEqual(mockContext.newPage.called, false);
   });
 
   it('does not pass page to handler for non-page scoped tools', async () => {

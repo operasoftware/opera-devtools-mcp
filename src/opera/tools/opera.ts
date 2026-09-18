@@ -5,7 +5,7 @@
  * This file is an original work developed by Opera.
  */
 
-import {zod} from '../../third_party/index.js';
+import {CDPSessionEvent, zod} from '../../third_party/index.js';
 import {ToolCategory} from '../../tools/categories.js';
 import {definePageTool} from '../../tools/ToolDefinition.js';
 import {withServiceWorkerRetry} from '../serviceWorkerRetry.js';
@@ -15,8 +15,8 @@ import {withServiceWorkerRetry} from '../serviceWorkerRetry.js';
 
 interface CDPSession {
   send(method: string, params?: Record<string, unknown>): Promise<unknown>;
-  on(event: string, listener: (params: unknown) => void): void;
-  off(event: string, listener: (params: unknown) => void): void;
+  on(event: string | symbol, listener: (params: unknown) => void): void;
+  off(event: string | symbol, listener: (params: unknown) => void): void;
 }
 
 const getCDPSession = (page: {_client(): CDPSession}): CDPSession =>
@@ -32,72 +32,123 @@ const dispatchAction = async (
   return response.result;
 };
 
+/**
+ * One `Opera.action*` event, tagged so it can be held before the correlationId
+ * that decides whether it belongs to this call is known.
+ */
+interface StreamedActionEvent {
+  kind: 'chunk' | 'completed' | 'failed';
+  params: unknown;
+}
+
+/**
+ * Dispatch a streamed action and wait for the browser to report it finished.
+ *
+ * The dispatch reply and the action's own events are separate messages, and the
+ * events can be delivered before the reply — or in the same read as it, which
+ * the SDK dispatches before the promise callback that learns the correlationId
+ * can run. Until that id arrives there is nothing to match an event against, so
+ * the listeners are attached before the dispatch is sent and whatever arrives
+ * meanwhile is held and replayed. Without that, an action that answers inside
+ * the dispatch round trip loses its completion and the caller waits for an
+ * event the browser has already sent.
+ */
 const dispatchWithStreamedResponse = (
   session: CDPSession,
   payload: Record<string, unknown>,
   onChunkCallback?: (chunk: string) => void,
   signal?: AbortSignal,
 ): Promise<string> => {
-  return withServiceWorkerRetry(() =>
-    session.send('Opera.dispatchWithStreamedResponse', {payload}),
-  ).then(raw => {
-    const {correlationId} = raw as {correlationId: string};
-    return new Promise<string>((resolve, reject) => {
-      const onChunk = (params: unknown) => {
-        const {correlationId: id, chunk} = params as {
-          correlationId: string;
-          chunk: string;
-        };
-        if (id === correlationId && onChunkCallback) {
-          onChunkCallback(chunk);
-        }
-      };
+  return new Promise<string>((resolve, reject) => {
+    /** Events that arrived before `correlationId` was known, in arrival order. */
+    const early: StreamedActionEvent[] = [];
+    let correlationId: string | undefined;
+    let settled = false;
 
-      const onCompleted = (params: unknown) => {
-        const {correlationId: id, result} = params as {
-          correlationId: string;
-          result: string;
-        };
-        if (id === correlationId) {
-          cleanup();
-          resolve(result);
-        }
-      };
+    const cleanup = () => {
+      session.off('Opera.actionChunk', onChunk);
+      session.off('Opera.actionCompleted', onCompleted);
+      session.off('Opera.actionFailed', onFailed);
+      session.off(CDPSessionEvent.Disconnected, onDisconnected);
+      signal?.removeEventListener('abort', onAbort);
+    };
 
-      const onFailed = (params: unknown) => {
-        const {correlationId: id, error} = params as {
-          correlationId: string;
-          error: string;
-        };
-        if (id === correlationId) {
-          cleanup();
-          reject(new Error(error));
-        }
-      };
-
-      const cleanup = () => {
-        session.off('Opera.actionChunk', onChunk);
-        session.off('Opera.actionCompleted', onCompleted);
-        session.off('Opera.actionFailed', onFailed);
-      };
-
-      if (signal?.aborted) {
-        reject(signal.reason);
+    const settle = (finish: () => void) => {
+      if (settled) {
         return;
       }
-      signal?.addEventListener(
-        'abort',
-        () => {
-          cleanup();
-          reject(signal.reason);
-        },
-        {once: true},
-      );
+      settled = true;
+      cleanup();
+      finish();
+    };
 
-      session.on('Opera.actionChunk', onChunk);
-      session.on('Opera.actionCompleted', onCompleted);
-      session.on('Opera.actionFailed', onFailed);
-    });
+    const apply = (event: StreamedActionEvent) => {
+      if (settled) {
+        return;
+      }
+      const {correlationId: id} = event.params as {correlationId: string};
+      if (id !== correlationId) {
+        return;
+      }
+      if (event.kind === 'chunk') {
+        const {chunk} = event.params as {chunk: string};
+        onChunkCallback?.(chunk);
+        return;
+      }
+      if (event.kind === 'completed') {
+        const {result} = event.params as {result: string};
+        settle(() => resolve(result));
+        return;
+      }
+      const {error} = event.params as {error: string};
+      settle(() => reject(new Error(error)));
+    };
+
+    const receive = (event: StreamedActionEvent) => {
+      if (settled) {
+        return;
+      }
+      if (correlationId === undefined) {
+        early.push(event);
+        return;
+      }
+      apply(event);
+    };
+
+    // Named rather than inlined into `session.on`: `cleanup` has to hand the
+    // same identities back to `off`, or the listeners outlive the call.
+    const onChunk = (params: unknown) => receive({kind: 'chunk', params});
+    const onCompleted = (params: unknown) =>
+      receive({kind: 'completed', params});
+    const onFailed = (params: unknown) => receive({kind: 'failed', params});
+    const onDisconnected = () =>
+      settle(() => reject(new Error('CDP session disconnected')));
+    const onAbort = () => settle(() => reject(signal?.reason));
+
+    session.on('Opera.actionChunk', onChunk);
+    session.on('Opera.actionCompleted', onCompleted);
+    session.on('Opera.actionFailed', onFailed);
+    session.on(CDPSessionEvent.Disconnected, onDisconnected);
+    signal?.addEventListener('abort', onAbort, {once: true});
+
+    if (signal?.aborted) {
+      settle(() => reject(signal.reason));
+      return;
+    }
+
+    withServiceWorkerRetry(() =>
+      session.send('Opera.dispatchWithStreamedResponse', {payload}),
+    )
+      .then(raw => {
+        const {correlationId: id} = raw as {correlationId: string};
+        correlationId = id;
+        for (const event of early.splice(0)) {
+          apply(event);
+        }
+      })
+      .catch(error => {
+        settle(() => reject(error));
+      });
   });
 };
 

@@ -87,10 +87,18 @@ describe('browser', () => {
           await safeClose(browser2);
           assert.fail('not reached');
         } catch (err) {
-          assert.strictEqual(
-            (err as Error).message,
-            `The browser is already running for ${folderPath}. Use --isolated to run multiple browser instances.`,
+          const message = (err as Error).message;
+          assert.ok(
+            message.includes(folderPath),
+            `the error must name the profile that is in use, got: ${message}`,
           );
+          // The two remedies are the point of the rewritten wording: upstream
+          // answers a profile collision with "use --isolated", i.e. a second
+          // throwaway profile, and never mentions driving the browser that
+          // already holds it. Asserting the flags the message hands the user
+          // keeps that decision under test without pinning the prose.
+          assert.match(message, /--remote-debugging-port/);
+          assert.match(message, /--isolated/);
         }
       } finally {
         await safeClose(browser1);

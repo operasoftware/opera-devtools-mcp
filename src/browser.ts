@@ -11,6 +11,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import {watchBrowserForOrphans} from './opera/browserCleanup.js';
+import {
+  attachFailed,
+  noDevToolsEndpoint,
+  profileInUse,
+} from './opera/browserErrors.js';
 import type {
   Browser,
   ChromeReleaseChannel,
@@ -92,12 +98,7 @@ export async function ensureBrowserConnected(options: {
         const browserWSEndpoint = `ws://127.0.0.1:${port}${rawPath}`;
         connectOptions.browserWSEndpoint = browserWSEndpoint;
       } catch (error) {
-        throw new Error(
-          `Could not connect to Chrome in ${userDataDir}. Check if Chrome is running and remote debugging is enabled by going to chrome://inspect/#remote-debugging.`,
-          {
-            cause: error,
-          },
-        );
+        throw new Error(noDevToolsEndpoint(userDataDir), {cause: error});
       }
     } else {
       if (!channel) {
@@ -122,12 +123,7 @@ export async function ensureBrowserConnected(options: {
     browserMode = 'connected';
     browser = connected;
   } catch (err) {
-    throw new Error(
-      `Could not connect to Chrome. ${autoConnect ? `Check if Chrome is running and remote debugging is enabled by going to chrome://inspect/#remote-debugging.` : `Check if Chrome is running.`}`,
-      {
-        cause: err,
-      },
-    );
+    throw new Error(attachFailed(options, autoConnect), {cause: err});
   }
   logger?.('Connected Puppeteer');
   return browser;
@@ -254,12 +250,10 @@ export async function launch(options: McpLaunchOptions): Promise<Browser> {
       userDataDir &&
       (error as Error).message.includes('The browser is already running')
     ) {
-      throw new Error(
-        `The browser is already running for ${userDataDir}. Use --isolated to run multiple browser instances.`,
-        {
-          cause: error,
-        },
-      );
+      // The wording lives in `opera/browserErrors.ts`: upstream's answer to a
+      // profile in use ("use --isolated") is the wrong one for the case that
+      // matters — driving the browser you already have.
+      throw new Error(profileInUse(userDataDir), {cause: error});
     }
     throw error;
   }
@@ -273,6 +267,12 @@ export async function ensureBrowserLaunched(
   }
   // Assign mode before browser; see the connect path above for rationale.
   const launched = await launch(options);
+  // Chrome's helpers sit in the browser's process group, not under it in the
+  // process tree, so a browser that dies without closing — SIGKILL, a crash,
+  // an OOM kill — leaves them running as orphans. `disconnected` is the only
+  // signal that the browser is gone, and the group kill it arms is the only
+  // teardown that reaches the helpers; see `opera/browserCleanup.ts`.
+  watchBrowserForOrphans(launched);
   browserMode = 'launched';
   browser = launched;
   return browser;
