@@ -89,12 +89,12 @@ Attaching (`--browser-url`, `--ws-endpoint`, `--autoConnect`) and launching are
 both supported and stay supported; what changed is that the product says which one
 you are in, and scopes its promises accordingly:
 
-|                                   | launched (we spawned it)      | attached (your browser)                                                                                                                           |
-| --------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Browser process died              | the next call relaunches it   | an error naming the target: _"An attached browser is not managed by this daemon, so it is not restarted for you — start it again and re-attach."_ |
-| Selected page closed, others live | re-select + note              | re-select + note; nothing in your browser is touched                                                                                              |
-| No pages at all                   | one page opened + note        | one page opened + note (a new tab in your browser)                                                                                                |
-| Opera automation flags needed     | relaunch (existing behaviour) | never relaunched                                                                                                                                  |
+|                                   | launched (we spawned it)                                                                                                                           | attached (your browser)                                                                                                                           |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Browser process died              | the next call relaunches it                                                                                                                        | an error naming the target: _"An attached browser is not managed by this daemon, so it is not restarted for you — start it again and re-attach."_ |
+| Selected page closed, others live | re-select + note                                                                                                                                   | re-select + note; nothing in your browser is touched                                                                                              |
+| No pages at all                   | one page opened + note                                                                                                                             | one page opened + note (a new tab in your browser)                                                                                                |
+| Opera automation flags needed     | acquired once, then kept for the browser's life; the acquisition waits for an idle browser and refuses (exit 5) rather than close work in progress | never relaunched                                                                                                                                  |
 
 `opera-browser-cli status` reports the mode, derived from the daemon's stored argv
 through the same predicate the server applies (`isLaunchMode`,
@@ -114,17 +114,41 @@ The profile-in-use failure now names both real remedies instead of suggesting
 browser rather than attaching to the one you have). All three lifecycle messages
 live in `src/opera/browserErrors.ts`, so `src/browser.ts` keeps call sites.
 
+**The Opera automation flags are sticky.** Opera AI refuses to run when the page
+reports itself as automation-controlled, so `opera_do` and `opera_research` need
+a browser launched with `--disable-blink-features=AutomationControlled`. That flag
+is acquired by relaunching a browser this daemon launched, and then kept for the
+rest of that browser's life. It used to be enforced in both directions, and the
+direction that took it away — an ordinary tool arriving while the browser carried
+it — closed the browser: two `opera_do` runs streaming in one browser died with
+the AI dispatcher's `The dispatcher was not able to dispatch: no target` the
+moment a third terminal asked for `take_snapshot`, and a running `navigate_page`
+was closed the moment another terminal started a `do`.
+
+So the flags are a property of the browser rather than of the tool that happens
+to be running. A browser that has them keeps them until it is gone, and the next
+browser this server launches starts without them — they are still not applied to
+every launch, because the flag changes observable page behaviour for ordinary
+DevTools tools. The one relaunch that remains is the acquisition, and it waits
+for every other invocation to finish first (`src/opera/browserActivity.ts` counts
+them); if the browser is still in use after ten seconds it refuses with exit 5
+and names the tools holding it, because the relaunch would close their pages.
+The flags are matched against the browser instance that holds them, so a browser
+that died and was relaunched — without them — is acquired again by the next
+`opera_do` rather than assumed to have them.
+
 ## Decisions, and what was rejected
 
-| Decision                  | Chosen                                                | Rejected alternative, and why                                                                                                                                                                                                                |
-| ------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Behaviour with zero pages | act — open one page                                   | an error with better wording; product intent is to act, and the page is what the product's own tooling already guarantees                                                                                                                    |
-| Where it applies          | both modes                                            | launch mode only: an attached browser is _more_ likely to lose tabs (a human is clicking) and re-selecting is internal state                                                                                                                 |
-| Where to recover          | the failure path only                                 | a health check on every call: an extra `Target.getTargets` per tool invocation for a state that is rare                                                                                                                                      |
-| Where the logic lives     | an Opera module driving `McpContext`'s **public** API | a method on `McpContext`: it needed private state for the note and cost ~50 lines of upstream drift; `createPagesSnapshot()`/`newPage()` record that note themselves, so the fork needs nothing private                                      |
-| Reporting the recovery    | the fork writes the note through the response         | relying on upstream's selection-fallback note: `McpResponse.handle` clears it with its own snapshot before reading it, so it never covers a replacement made earlier in the call — and a page opened in someone's browser must not be silent |
-| Bundle-level Opera tools  | stay page-scoped                                      | giving them a browser-target CDP session would be semantically cleaner, but whether Opera answers `Opera.dispatchAction` on a browser session is unverified and the recovery removes the practical problem                                   |
-| Ownership model           | keep attach, make the mode explicit                   | blocking attach in the CLI would delete a deliberate, tested feature (`OPERA_CLI_BROWSER_URL` promotion) and the documented routes for sandboxed, remote and signed-in-Neon use                                                              |
+| Decision                  | Chosen                                                                             | Rejected alternative, and why                                                                                                                                                                                                                                                                                                      |
+| ------------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Behaviour with zero pages | act — open one page                                                                | an error with better wording; product intent is to act, and the page is what the product's own tooling already guarantees                                                                                                                                                                                                          |
+| Where it applies          | both modes                                                                         | launch mode only: an attached browser is _more_ likely to lose tabs (a human is clicking) and re-selecting is internal state                                                                                                                                                                                                       |
+| Where to recover          | the failure path only                                                              | a health check on every call: an extra `Target.getTargets` per tool invocation for a state that is rare                                                                                                                                                                                                                            |
+| Where the logic lives     | an Opera module driving `McpContext`'s **public** API                              | a method on `McpContext`: it needed private state for the note and cost ~50 lines of upstream drift; `createPagesSnapshot()`/`newPage()` record that note themselves, so the fork needs nothing private                                                                                                                            |
+| Reporting the recovery    | the fork writes the note through the response                                      | relying on upstream's selection-fallback note: `McpResponse.handle` clears it with its own snapshot before reading it, so it never covers a replacement made earlier in the call — and a page opened in someone's browser must not be silent                                                                                       |
+| Bundle-level Opera tools  | stay page-scoped                                                                   | giving them a browser-target CDP session would be semantically cleaner, but whether Opera answers `Opera.dispatchAction` on a browser session is unverified and the recovery removes the practical problem                                                                                                                         |
+| Ownership model           | keep attach, make the mode explicit                                                | blocking attach in the CLI would delete a deliberate, tested feature (`OPERA_CLI_BROWSER_URL` promotion) and the documented routes for sandboxed, remote and signed-in-Neon use                                                                                                                                                    |
+| Opera flag changes        | acquire once, keep for the browser's life, gate the acquisition on an idle browser | a conditional downgrade (skip it only while a browser is busy): keeps the flags a per-tool invariant, but the swap still closes the browser as soon as it is idle — losing the tabs the user is reading — and the policy stays two-directional, which is what turned a snapshot in one terminal into a browser teardown in another |
 
 ### Why not inheritance
 
@@ -144,10 +168,13 @@ boring version that keeps the seam at one call site.
 
 Opera-owned: `src/opera/pageRecovery.ts` (the resolution, single-flight),
 `src/opera/browserErrors.ts` (the lifecycle prose), `src/opera/browserFlags.ts`
-(the mode predicate, exported).
+(the mode predicate, exported), `src/opera/browserActivity.ts` (who is inside a
+tool invocation right now — what a relaunch waits for) and
+`src/opera/toolHandlerHooks.ts` (the claims taken and released around every
+invocation).
 
 Upstream files, carried as fork divergence (`docs/UPSTREAM.md`):
-`src/ToolHandler.ts` (one call, plus its header comment),
+`src/ToolHandler.ts` (two hook calls, plus its header comment),
 `src/bin/chrome-devtools.ts` (`browser=…` in `status`),
 `src/browser.ts` (three message call sites). **`src/McpContext.ts` and
 `src/McpResponse.ts` are untouched by this change** — that is the point of the
@@ -155,6 +182,15 @@ split.
 
 ## Verification
 
+- `tests/opera/browserFlags.test.ts` — the flag policy against stubbed launch
+  seams: the acquisition, the stickiness (a tool that needs no flags never
+  touches the browser — the regression that closed a browser under a streaming
+  `do`), a second acquisition for a browser relaunched without the flags, and the
+  two ends of the idle gate: a relaunch that waits for the other invocation to
+  finish, and the refusal that names it. **Needs no browser**, so it runs
+  anywhere.
+- `tests/ToolHandler.test.ts` — the claims: an invocation that fails still hands
+  its browser claim back, observed from another claim.
 - `tests/opera/pageRecovery.test.ts` — the resolution itself, against a stubbed
   context: the happy path costs no listing, a live page is re-selected without
   opening anything, an empty browser gets exactly one page and says so, concurrent

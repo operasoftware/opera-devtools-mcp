@@ -26,7 +26,7 @@ registered`), so the seam bookkeeping this migration introduced is intact.
   `opera-browser-cli.js`; `createCliEnv()` strips `OPERA_CLI_*` and points `HOME`
   at a throwaway directory).
 
-Two gaps, both recorded rather than silently absorbed:
+Three gaps, all recorded rather than silently absorbed:
 
 1. **`docs/architecture.md` was never written.** §3.1 lists it as a new
    Opera-owned document; it is absent from the tree, and `docs/UPSTREAM.md`
@@ -38,6 +38,20 @@ Two gaps, both recorded rather than silently absorbed:
    stress suite can launch a persistent profile with exactly the flags
    production reverts (see §4.1). No behaviour change; the constant was already
    in the file.
+3. **`package.json` no longer declares `opera-browser-cli`, superseding §3.1's
+   `bin` row and §3's acceptance item 7.** npm refuses to write a global binstub
+   whose current target lives outside the package being linked (`bin-links`'s
+   `check-bin.js`: global, top-level, not forced), so declaring the name failed
+   `npm link` — and every `npm install -g` of this package — on a machine that
+   has the older repo's CLI, which is exactly this migration's audience. The
+   fork's CLI is unaffected as an entry point (`src/bin/opera-browser-cli.ts`
+   stays); only its binstub is no longer npm's to write. `npm run link:cli`
+   deploys it, replacing the older repo's (`scripts/link.ts`), while `npm link`
+   and `npm run link` deploy the MCP server alone and leave the older repo's
+   `opera-browser-cli` where it is. `tests/opera/branding.test.ts` loses the
+   subtest that asserted the manifest declared both names — the manifest no
+   longer does, and re-pinning it would only pin npm's wiring. Consequence for
+   releases: a published tarball installs the server's binary only.
 
 Later work that belongs to the same seam, already registered in
 `docs/UPSTREAM.md`: the process-lifecycle stress suite (`tests/stress/**`,
