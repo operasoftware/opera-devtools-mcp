@@ -6,8 +6,9 @@
  */
 
 /**
- * The daemon's socket edges: the frame it is answering, and the failure it
- * reports when it cannot start listening at all.
+ * The daemon's socket edges: the frame it is answering (`dispatchSocketMessage`,
+ * which routes a streaming request through `answerSocketMessage`), and the
+ * failure it reports when it cannot start listening at all.
  *
  * Both exist because the daemon's own error handling is a trapdoor. A frame that
  * is not JSON rejects the transport callback, and the daemon's
@@ -18,11 +19,14 @@
  * left alive and deaf, which is the orphan this whole area exists to prevent.
  */
 
+import {randomUUID} from 'node:crypto';
 import process from 'node:process';
 
-import type {DaemonMessage} from '../daemon/types.js';
+import type {DaemonLogFrame, DaemonMessage} from '../daemon/types.js';
+import type {PipeTransport} from '../third_party/index.js';
 
 import {writeExitReason} from './daemonLifecycle.js';
+import {withLogSink} from './daemonStreaming.js';
 
 /**
  * Parse one framed socket message and hand it to `handle`, answering with an
@@ -49,6 +53,35 @@ export async function answerSocketMessage(
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+/**
+ * Answer one framed socket message, streaming requests included.
+ *
+ * A streaming request is the `invoke_tool` variant that opted in, and it gets a
+ * token of its own: the chunks it produces are written to this connection as
+ * they arrive, and the same final response frame follows. Two connections may
+ * stream at once, so the token is what keeps their chunks apart — see
+ * `opera/daemonStreaming.ts`. Every other message goes straight to `handle`.
+ */
+export async function dispatchSocketMessage(
+  raw: string,
+  transport: PipeTransport,
+  handle: (message: DaemonMessage, streamToken?: string) => Promise<object>,
+): Promise<object> {
+  return answerSocketMessage(raw, message => {
+    if (message.method === 'invoke_tool' && message.stream === true) {
+      const streamToken = randomUUID();
+      return withLogSink(
+        streamToken,
+        chunk => {
+          transport.send(JSON.stringify({log: chunk} satisfies DaemonLogFrame));
+        },
+        () => handle(message, streamToken),
+      );
+    }
+    return handle(message);
+  });
 }
 
 export interface StartupFailureOptions {

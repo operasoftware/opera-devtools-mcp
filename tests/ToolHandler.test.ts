@@ -16,7 +16,15 @@ import {parseArguments} from '../src/config/mcp-options.js';
 import {McpContext} from '../src/McpContext.js';
 import {McpPage} from '../src/McpPage.js';
 import {McpResponse} from '../src/McpResponse.js';
-import type {OperaToolHooks} from '../src/opera/toolHandlerHooks.js';
+import {
+  noteToolStarted,
+  otherBrowserUsers,
+  resetBrowserActivity,
+} from '../src/opera/browserActivity.js';
+import {
+  createOperaToolHooks,
+  type OperaToolHooks,
+} from '../src/opera/toolHandlerHooks.js';
 import {ClearcutLogger} from '../src/telemetry/ClearcutLogger.js';
 import {zod} from '../src/third_party/index.js';
 import {ToolHandler} from '../src/ToolHandler.js';
@@ -685,6 +693,9 @@ describe('ToolHandler', () => {
         beforeInvoke: async () => {
           // Intentionally does nothing.
         },
+        afterInvoke: () => {
+          // Intentionally does nothing.
+        },
         makeLogCallback: () => undefined,
         ...overrides,
       };
@@ -778,6 +789,49 @@ describe('ToolHandler', () => {
       ).handle({});
 
       assert.deepStrictEqual(logged, ['chunk']);
+    });
+
+    it('releases the browser claim of an invocation that fails', async () => {
+      // The claim is what tells the next Opera AI tool that the browser is in
+      // use; leaving one behind on a failure would have every later `opera_do`
+      // wait for a browser nothing is holding. Observed from another claim,
+      // because an invocation is not one of its own "others".
+      resetBrowserActivity();
+      noteToolStarted('take_snapshot');
+      let during: string[] = [];
+      const tool: ToolDefinition = {
+        name: 'opera_chat',
+        description: 'fails',
+        annotations: {category: ToolCategory.OPERA, readOnlyHint: true},
+        schema: {},
+        blockedByDialog: false,
+        verifyFilesSchema: {},
+        handler: async () => {
+          during = otherBrowserUsers('take_snapshot');
+          throw new Error('the AI said no');
+        },
+      };
+
+      try {
+        await new ToolHandler(
+          tool,
+          makeArgs(),
+          async () => makeContext(),
+          new Mutex(),
+          createOperaToolHooks({
+            serverArgs: makeArgs(),
+            logFile: undefined,
+            resetContext: () => {
+              // Not asserted in this case; no relaunch happens for this tool.
+            },
+          }),
+        ).handle({});
+
+        assert.deepStrictEqual(during, ['opera_chat']);
+        assert.deepStrictEqual(otherBrowserUsers('take_snapshot'), []);
+      } finally {
+        resetBrowserActivity();
+      }
     });
 
     it('forwards the abort signal to the tool handler', async () => {

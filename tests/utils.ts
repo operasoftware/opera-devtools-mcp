@@ -466,8 +466,11 @@ export async function createCliEnv(): Promise<Record<string, string>> {
 export async function runCli(
   args: string[],
   sessionId?: string,
+  envOverrides: Record<string, string> = {},
 ): Promise<{status: number | null; stdout: string; stderr: string}> {
-  const env = await createCliEnv();
+  // `createCliEnv` strips every `OPERA_CLI_*`; a test that needs one puts it
+  // back through `envOverrides`.
+  const env = {...(await createCliEnv()), ...envOverrides};
   const {promise, resolve, reject} = Promise.withResolvers<{
     status: number | null;
     stdout: string;

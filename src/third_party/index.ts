@@ -32,6 +32,7 @@ export {
   ListRootsRequestSchema,
   RootsListChangedNotificationSchema,
   ListRootsResultSchema,
+  LoggingMessageNotificationSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 export {z as zod} from 'zod';
 export {default as ajv} from 'ajv';

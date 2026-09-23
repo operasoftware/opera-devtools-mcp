@@ -316,6 +316,34 @@ describe('applyEnvToArgv', () => {
     assert.deepStrictEqual(argv, ['--browserUrl=http://127.0.0.1:9222']);
   });
 
+  it('does not inject --userDataDir when --isolated is on argv', () => {
+    // yargs treats the two as mutually exclusive, so injecting the configured
+    // dir alongside `--isolated` killed the MCP server during argument parsing
+    // — the daemon reported "Connection closed" and the next command silently
+    // ran on the persistent profile instead of a throwaway one.
+    process.env.OPERA_CLI_USER_DATA_DIR = '/tmp/env-profile';
+    const argv: string[] = ['--isolated'];
+    applyEnvToArgv(argv);
+    assert.deepStrictEqual(argv, ['--isolated']);
+  });
+
+  it('still injects the configured dir when isolation is only switched off', () => {
+    process.env.OPERA_CLI_USER_DATA_DIR = '/tmp/env-profile';
+    const argv: string[] = ['--no-isolated'];
+    applyEnvToArgv(argv);
+    assert.deepStrictEqual(argv, [
+      '--no-isolated',
+      '--userDataDir=/tmp/env-profile',
+      '--ignoreDefaultChromeArg=--use-mock-keychain',
+      '--ignoreDefaultChromeArg=--password-store=basic',
+      '--ignoreDefaultChromeArg=--disable-extensions',
+      '--ignoreDefaultChromeArg=--disable-component-extensions-with-background-pages',
+      '--ignoreDefaultChromeArg=--disable-default-apps',
+      '--ignoreDefaultChromeArg=--disable-background-networking',
+      '--chromeArg=--show-component-extension-options',
+    ]);
+  });
+
   it('does not inject --executablePath when attaching by WS endpoint', () => {
     process.env.OPERA_CLI_EXECUTABLE_PATH = '/tmp/env-opera';
     const argv: string[] = [
@@ -380,5 +408,66 @@ describe('applyEnvToArgv', () => {
     const argv: string[] = ['--headless', 'true'];
     applyEnvToArgv(argv);
     assert.deepStrictEqual(argv, ['--headless', 'true']);
+  });
+
+  it('honours every documented spelling of --browserUrl over OPERA_CLI_BROWSER_URL', () => {
+    process.env.OPERA_CLI_BROWSER_URL = 'http://env:9222';
+    for (const explicit of [
+      '--browserUrl=http://cli:9222',
+      '--browser-url=http://cli:9222',
+      '-u=http://cli:9222',
+      '--browser-url', // bare (two-token) form is just as explicit
+    ]) {
+      const argv: string[] = [explicit];
+      applyEnvToArgv(argv);
+      assert.deepStrictEqual(argv, [explicit]);
+    }
+  });
+
+  it('honours the kebab-case --user-data-dir over OPERA_CLI_USER_DATA_DIR', () => {
+    process.env.OPERA_CLI_USER_DATA_DIR = '/tmp/env-profile';
+    for (const explicit of [
+      '--userDataDir=/tmp/cli-profile',
+      '--user-data-dir=/tmp/cli-profile',
+    ]) {
+      const argv: string[] = [explicit];
+      applyEnvToArgv(argv);
+      assert.deepStrictEqual(argv, [explicit]);
+    }
+  });
+
+  it('honours every documented spelling of --wsEndpoint (no profile/executable injection)', () => {
+    process.env.OPERA_CLI_USER_DATA_DIR = '/tmp/env-profile';
+    process.env.OPERA_CLI_EXECUTABLE_PATH = '/tmp/env-opera';
+    const endpoint = 'ws://127.0.0.1:9222/devtools/browser/abc';
+    for (const explicit of [
+      `--wsEndpoint=${endpoint}`,
+      `--ws-endpoint=${endpoint}`,
+      `-w=${endpoint}`,
+    ]) {
+      const argv: string[] = [explicit];
+      applyEnvToArgv(argv);
+      assert.deepStrictEqual(argv, [explicit]);
+    }
+  });
+
+  it('honours every documented spelling of --executablePath over OPERA_CLI_EXECUTABLE_PATH', () => {
+    process.env.OPERA_CLI_EXECUTABLE_PATH = '/tmp/env-opera';
+    for (const explicit of [
+      '--executablePath=/tmp/cli-opera',
+      '--executable-path=/tmp/cli-opera',
+      '-e=/tmp/cli-opera',
+    ]) {
+      const argv: string[] = [explicit];
+      applyEnvToArgv(argv);
+      assert.deepStrictEqual(argv, [explicit]);
+    }
+  });
+
+  it('keeps --no-headless over OPERA_CLI_HEADED', () => {
+    process.env.OPERA_CLI_HEADED = '1';
+    const argv: string[] = ['--no-headless'];
+    applyEnvToArgv(argv);
+    assert.deepStrictEqual(argv, ['--no-headless']);
   });
 });

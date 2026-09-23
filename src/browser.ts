@@ -11,7 +11,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import {watchBrowserForOrphans} from './opera/browserCleanup.js';
+import {
+  disarmBrowserOrphanCleanup,
+  watchBrowserForOrphans,
+} from './opera/browserCleanup.js';
 import {
   attachFailed,
   noDevToolsEndpoint,
@@ -298,6 +301,9 @@ export async function closeBrowser(): Promise<void> {
     return;
   }
   if (mode === 'launched') {
+    // The close below emits `disconnected` too; without this the orphan-cleanup
+    // handler would SIGKILL the group mid-shutdown. See `opera/browserCleanup.ts`.
+    disarmBrowserOrphanCleanup();
     await b.close().catch(err => {
       logger?.('Failed to close browser', err);
     });
@@ -310,6 +316,7 @@ export async function closeBrowser(): Promise<void> {
 
 export async function closeBrowserIfOpen(): Promise<void> {
   if (browser?.connected) {
+    disarmBrowserOrphanCleanup();
     try {
       await browser.close();
     } catch {

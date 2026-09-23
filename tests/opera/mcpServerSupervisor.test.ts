@@ -155,4 +155,100 @@ describe('superviseMcpServer', () => {
     await sleep(50);
     assert.strictEqual(test.connects(), 1);
   });
+
+  it('gives up and records why when connect rejects outright', async () => {
+    const sessionId = crypto.randomUUID();
+    mkdirSync(getRuntimeHome(sessionId), {recursive: true, mode: 0o700});
+    const handles: FakeHandles = {client: null, transport: null};
+    const report: {close: (transport: StdioClientTransport) => void} = {
+      close: _transport => undefined,
+    };
+    let connects = 0;
+    let gaveUp = false;
+
+    const connect = async () => {
+      connects++;
+      if (connects === 1) {
+        handles.transport = fakeTransport(candidate => report.close(candidate));
+        return;
+      }
+      // Every respawn attempt rejects before it can publish a server.
+      throw new Error('spawn failed');
+    };
+
+    const supervisor = superviseMcpServer({
+      sessionId,
+      connect,
+      handles: () => handles,
+      giveUp: async () => {
+        gaveUp = true;
+      },
+    });
+    report.close = transport => supervisor.onTransportClosed(transport);
+
+    await connect();
+    supervisor.onTransportClosed(handles.transport!);
+
+    await waitFor('the give-up', () => gaveUp);
+    assert.strictEqual(connects, 1 + RESPAWN_ATTEMPTS);
+    assert.match(
+      readExitReason(sessionId) ?? '',
+      /MCP server respawn failed after 3 attempts: spawn failed/,
+    );
+  });
+
+  it('does not start a parallel respawn when a close arrives mid-respawn', async () => {
+    const sessionId = crypto.randomUUID();
+    mkdirSync(getRuntimeHome(sessionId), {recursive: true, mode: 0o700});
+    const handles: FakeHandles = {client: null, transport: null};
+    const report: {close: (transport: StdioClientTransport) => void} = {
+      close: _transport => undefined,
+    };
+    let connects = 0;
+    let blockNext = false;
+    let unblock: (() => void) | undefined;
+
+    const connect = async () => {
+      connects++;
+      const transport = fakeTransport(candidate => report.close(candidate));
+      handles.transport = transport;
+      if (blockNext) {
+        blockNext = false;
+        const {promise, resolve} = Promise.withResolvers<void>();
+        unblock = resolve;
+        await promise;
+      }
+    };
+
+    const supervisor = superviseMcpServer({
+      sessionId,
+      connect,
+      handles: () => handles,
+      giveUp: async () => {
+        // This case never reaches the give-up path.
+      },
+    });
+    report.close = transport => supervisor.onTransportClosed(transport);
+
+    await connect();
+    const first = handles.transport!;
+
+    // First close starts a respawn whose replacement connect blocks in flight.
+    blockNext = true;
+    supervisor.onTransportClosed(first);
+
+    // Wait until that replacement connect is running and blocked.
+    await waitFor('the respawn to be in flight', () => connects === 2);
+
+    // A second close — the replacement dying during its own startup — arrives
+    // while the respawn is still running. It must be coalesced into the one
+    // in-flight attempt, not spawn a parallel one.
+    supervisor.onTransportClosed(handles.transport!);
+    await sleep(50);
+    assert.strictEqual(connects, 2, 'no parallel respawn may start');
+
+    // Let the blocked connect resolve so the run (and its retry) can settle.
+    unblock!();
+    await waitFor('the deferred retry', () => connects === 3);
+  });
 });

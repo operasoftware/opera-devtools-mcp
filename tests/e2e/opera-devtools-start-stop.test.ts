@@ -107,4 +107,53 @@ describe(CLI_BIN_NAME, () => {
       fs.rmSync(workspace, {recursive: true, force: true});
     }
   });
+
+  it('lets configured OPERA_CLI_* browser options beat the start defaults', async () => {
+    const userDataDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'opera-devtools-config-profile-'),
+    );
+    const configured = {
+      OPERA_CLI_HEADED: '1',
+      OPERA_CLI_USER_DATA_DIR: userDataDir,
+    };
+
+    try {
+      const startResult = await runCli(['start'], sessionId, configured);
+      assert.strictEqual(
+        startResult.status,
+        0,
+        `start command failed: ${startResult.stderr}`,
+      );
+
+      const statusResult = await runCli(['status'], sessionId, configured);
+      assert.strictEqual(statusResult.status, 0);
+      // These are the args the daemon hands the MCP server, which turns the
+      // missing headless flag into `--headless=false` from the same config. A
+      // serialized `--headless`/`--isolated` here is the CLI's own start
+      // default overriding the config before the MCP server can read it.
+      assert.ok(
+        statusResult.stdout.includes(`--user-data-dir=${userDataDir}`) &&
+          !statusResult.stdout.includes('--isolated') &&
+          !statusResult.stdout.includes('--headless'),
+        `configured browser options were not honoured: ${statusResult.stdout}`,
+      );
+
+      // The other direction: an explicit "no window" config still reaches it.
+      await runCli(['stop'], sessionId);
+      const headlessEnv = {OPERA_CLI_HEADED: '0'};
+      const headlessStart = await runCli(['start'], sessionId, headlessEnv);
+      assert.strictEqual(
+        headlessStart.status,
+        0,
+        `start command failed: ${headlessStart.stderr}`,
+      );
+      const headlessStatus = await runCli(['status'], sessionId, headlessEnv);
+      assert.ok(
+        headlessStatus.stdout.includes('--headless'),
+        `OPERA_CLI_HEADED=0 was not honoured: ${headlessStatus.stdout}`,
+      );
+    } finally {
+      fs.rmSync(userDataDir, {recursive: true, force: true});
+    }
+  });
 });

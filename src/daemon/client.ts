@@ -9,15 +9,11 @@ import fs from 'node:fs';
 import net from 'node:net';
 
 import {ensureCleanStart, readExitReason} from '../opera/daemonLifecycle.js';
-import {
-  daemonExitMessage,
-  nameSpawnFailure,
-  openDaemonLog,
-} from '../opera/daemonLog.js';
+import {nameSpawnFailure, openDaemonLog} from '../opera/daemonLog.js';
+import {requestOverSocket} from '../opera/daemonStreaming.js';
 import type {CallToolResult} from '../third_party/index.js';
-import {PipeTransport} from '../third_party/index.js';
 import {getTempFilePath} from '../utils/files.js';
-import {logger, puppeteerLogger} from '../utils/logger.js';
+import {logger} from '../utils/logger.js';
 
 import type {
   DaemonMessage,
@@ -164,11 +160,16 @@ const SEND_COMMAND_TIMEOUT = 60_000; // ms
 
 /**
  * `sendCommand` opens a socket connection sends a single command and disconnects.
+ *
+ * The frame protocol — including `onLog`, which opts the request into the
+ * streaming variant and hands each chunk over as it arrives — lives in
+ * `opera/daemonStreaming.ts`'s `requestOverSocket`.
  */
 export async function sendCommand(
   command: DaemonMessage,
   sessionId: string,
   timeout = SEND_COMMAND_TIMEOUT,
+  onLog?: (chunk: string) => void,
 ): Promise<DaemonResponse> {
   // Before connecting and sending, verify the daemon is still alive.
   if (!isDaemonRunning(sessionId)) {
@@ -186,31 +187,7 @@ export async function sendCommand(
     path: socketPath,
   });
 
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      socket.destroy();
-      reject(new Error('Timeout waiting for daemon response'));
-    }, timeout);
-
-    const transport = new PipeTransport(socket, socket, puppeteerLogger);
-    transport.onmessage = async (message: string) => {
-      clearTimeout(timer);
-      logger?.('onmessage', message);
-      resolve(JSON.parse(message));
-    };
-    socket.on('error', error => {
-      clearTimeout(timer);
-      logger?.('Socket error:', error);
-      reject(error);
-    });
-    socket.on('close', () => {
-      clearTimeout(timer);
-      logger?.('Socket closed:');
-      reject(new Error(daemonExitMessage(sessionId)));
-    });
-    logger?.('Sending message', command);
-    transport.send(JSON.stringify(command));
-  });
+  return requestOverSocket({socket, command, sessionId, timeout, onLog});
 }
 
 export async function stopDaemon(sessionId: string) {

@@ -15,14 +15,18 @@ import type {McpContext} from '../../src/McpContext.js';
 import type {McpPage} from '../../src/McpPage.js';
 import type {McpResponse} from '../../src/McpResponse.js';
 import {serviceWorkerRetryPolicy} from '../../src/opera/serviceWorkerRetry.js';
+import {operaAiStreamPolicy} from '../../src/opera/streamingTools.js';
 import {
   operaAuthenticateMcpServer,
+  operaCallMcpTool,
   operaChat,
   operaConnectMcpServer,
   operaDisableMcpServer,
   operaDo,
   operaEnableMcpServer,
+  operaListMcpServers,
   operaListModels,
+  operaListMcpTools,
   operaMake,
   operaRegisterMcpServer,
   operaResearch,
@@ -135,6 +139,7 @@ async function waitForStreamListeners(session: FakeCDPSession): Promise<void> {
 
 describe('opera tools', () => {
   const defaultDelayMs = serviceWorkerRetryPolicy.delayMs;
+  const defaultFirstEventTimeoutMs = operaAiStreamPolicy.firstEventTimeoutMs;
 
   beforeEach(() => {
     // Drive the retry loop without waiting on real backoff. Faking timers with
@@ -145,6 +150,7 @@ describe('opera tools', () => {
 
   afterEach(() => {
     serviceWorkerRetryPolicy.delayMs = defaultDelayMs;
+    operaAiStreamPolicy.firstEventTimeoutMs = defaultFirstEventTimeoutMs;
     sinon.restore();
   });
 
@@ -1036,10 +1042,74 @@ describe('opera tools', () => {
     });
   });
 
+  describe('streamed action that never starts', () => {
+    /** A deadline short enough to observe, long enough not to be a race. */
+    const stallAfterMs = 20;
+
+    beforeEach(() => {
+      operaAiStreamPolicy.firstEventTimeoutMs = stallAfterMs;
+    });
+
+    it('reports an action the browser never started', async () => {
+      // Acked with a correlationId, then silence: what a research tab that
+      // opens with no prompt in it looks like from here. Left alone the command
+      // waits out the daemon's twenty-minute cap to say "Request timed out",
+      // which names neither the action nor the browser.
+      const session = new FakeCDPSession().resolveWith({correlationId: 'c1'});
+      const {response, lines} = makeResponse();
+
+      await operaResearch.handler(
+        makeRequest(session, {prompt: 'latest hit'}),
+        response,
+        context,
+      );
+
+      assert.strictEqual(session.sendCount, 1);
+      assert.match(lines[0]!, /did not start the research action/);
+      assert.match(lines[0]!, /no progress was reported for/);
+    });
+
+    it('keeps waiting once the browser has reported anything', async () => {
+      const session = new FakeCDPSession().resolveWith({correlationId: 'c1'});
+      const {response, lines} = makeResponse();
+
+      const pending = operaDo.handler(
+        makeRequest(session, {prompt: 'go'}),
+        response,
+        context,
+      );
+      await waitForStreamListeners(session);
+      // The first event retires the deadline, however long the run then takes:
+      // a research run may be quiet for minutes before and between chunks.
+      session.emit('Opera.actionChunk', {correlationId: 'c1', chunk: 'step 1'});
+      // A real wait, past the deadline, is the only way to see that it was
+      // cleared: sinon's fake clock replaces the globals `node:test` schedules
+      // subtests with, which silently drops whole suites from the run.
+      await new Promise(resolve => setTimeout(resolve, stallAfterMs * 2));
+      session.emit('Opera.actionCompleted', {
+        correlationId: 'c1',
+        result: 'done',
+      });
+      await pending;
+
+      assert.deepStrictEqual(lines, ['done']);
+    });
+  });
+
   describe('service worker retry', () => {
+    /**
+     * What Opera reports while its AI service worker is still coming up — the
+     * one failure a replay is allowed after.
+     */
+    const NOT_DISPATCHED = 'The dispatcher was not able to dispatch: no target';
+
+    /** What a failing browser-side action reports instead (see the log). */
+    const STORAGE_UNREADABLE =
+      'Protocol error (Opera.dispatchAction): AbortError NotReadableError Data lost due to missing file. Affected record should be considered irrecoverable';
+
     it('retries a failing dispatch and succeeds', async () => {
       const session = new FakeCDPSession()
-        .failTimes(2, new Error('service worker not ready'))
+        .failTimes(2, new Error(NOT_DISPATCHED))
         .resolveWith({result: 'eventually'});
       const {response, lines} = makeResponse();
 
@@ -1054,7 +1124,9 @@ describe('opera tools', () => {
     });
 
     it('gives up after maxAttempts and reports the last error', async () => {
-      const session = new FakeCDPSession().rejectWith(new Error('still down'));
+      const session = new FakeCDPSession().rejectWith(
+        new Error(NOT_DISPATCHED),
+      );
       const {response, lines} = makeResponse();
 
       await operaChat.handler(
@@ -1067,7 +1139,43 @@ describe('opera tools', () => {
         session.sendCount,
         serviceWorkerRetryPolicy.maxAttempts,
       );
-      assert.match(lines[0]!, /still down/);
+      assert.match(lines[0]!, /dispatcher was not able to dispatch/);
+    });
+
+    it('does not replay a failure from the browser side of the dispatch', async () => {
+      // One command, five attempts, five tabs: `chat` failing on unreadable AI
+      // storage was re-sent for 10 seconds and left one tab per attempt. The
+      // error is the browser's own, so nothing about it says the action never
+      // started.
+      const session = new FakeCDPSession().rejectWith(
+        new Error(STORAGE_UNREADABLE),
+      );
+      const {response, lines} = makeResponse();
+
+      await operaChat.handler(
+        makeRequest(session, {prompt: 'hi'}),
+        response,
+        context,
+      );
+
+      assert.strictEqual(session.sendCount, 1);
+      assert.match(lines[0]!, /NotReadableError/);
+    });
+
+    it('does not replay a failure from the browser side of a streamed action', async () => {
+      const session = new FakeCDPSession().rejectWith(
+        new Error(STORAGE_UNREADABLE),
+      );
+      const {response, lines} = makeResponse();
+
+      await operaDo.handler(
+        makeRequest(session, {prompt: 'go'}),
+        response,
+        context,
+      );
+
+      assert.strictEqual(session.sendCount, 1);
+      assert.match(lines[0]!, /NotReadableError/);
     });
 
     it('does not retry a dead-browser dispatch error', async () => {
@@ -1105,7 +1213,7 @@ describe('opera tools', () => {
 
     it('retries the initial dispatch of a streamed action too', async () => {
       const session = new FakeCDPSession()
-        .failTimes(1, new Error('service worker not ready'))
+        .failTimes(1, new Error(NOT_DISPATCHED))
         .resolveWith({correlationId: 'c1'});
       const {response, lines} = makeResponse();
 
@@ -1127,7 +1235,7 @@ describe('opera tools', () => {
 
     it('retries a failing registerMcpServer dispatch and succeeds', async () => {
       const session = new FakeCDPSession()
-        .failTimes(2, new Error('service worker not ready'))
+        .failTimes(2, new Error(NOT_DISPATCHED))
         .resolveWith({result: 'registered'});
       const {response, lines} = makeResponse();
 
@@ -1146,7 +1254,7 @@ describe('opera tools', () => {
 
     it('retries the initial dispatch of authenticateMcpServer too', async () => {
       const session = new FakeCDPSession()
-        .failTimes(1, new Error('service worker not ready'))
+        .failTimes(1, new Error(NOT_DISPATCHED))
         .resolveWith({correlationId: 'c1'});
       const {response, lines} = makeResponse();
 
@@ -1164,6 +1272,134 @@ describe('opera tools', () => {
 
       assert.strictEqual(session.sendCount, 2);
       assert.deepStrictEqual(lines, ['authenticated']);
+    });
+  });
+
+  describe('opera_list_mcp_servers', () => {
+    it('dispatches a LIST_SERVERS action and returns the result', async () => {
+      const session = new FakeCDPSession().resolveWith({
+        result: 'servers list',
+      });
+      const {response, lines} = makeResponse();
+
+      await operaListMcpServers.handler(
+        makeRequest(session, {}),
+        response,
+        context,
+      );
+
+      assert.strictEqual(session.sent[0]?.method, 'Opera.dispatchAction');
+      assert.deepStrictEqual(session.payloadAt(0), {
+        action: 'listMcpServers',
+        type: 'LIST_SERVERS',
+      });
+      assert.deepStrictEqual(lines, ['servers list']);
+    });
+  });
+
+  describe('opera_list_mcp_tools', () => {
+    it('dispatches a LIST_TOOLS action naming the server', async () => {
+      const session = new FakeCDPSession().resolveWith({result: 'tools list'});
+      const {response, lines} = makeResponse();
+
+      await operaListMcpTools.handler(
+        makeRequest(session, {server: 'github'}),
+        response,
+        context,
+      );
+
+      assert.strictEqual(session.sent[0]?.method, 'Opera.dispatchAction');
+      assert.deepStrictEqual(session.payloadAt(0), {
+        action: 'listMcpTools',
+        server: 'github',
+        type: 'LIST_TOOLS',
+      });
+      assert.deepStrictEqual(lines, ['tools list']);
+    });
+  });
+
+  describe('opera_call_mcp_tool', () => {
+    it('streams an EXECUTE_TOOL action and pins the toolName key', async () => {
+      const session = new FakeCDPSession().resolveWith({correlationId: 'c1'});
+      const {response, lines, logs} = makeResponse();
+
+      const pending = operaCallMcpTool.handler(
+        makeRequest(session, {server: 'github', tool: 'list_issues'}),
+        response,
+        context,
+      );
+
+      await waitForStreamListeners(session);
+
+      assert.strictEqual(
+        session.sent[0]?.method,
+        'Opera.dispatchWithStreamedResponse',
+      );
+      // The payload spells the executed tool `toolName`, not `tool` — the two
+      // are easy to confuse, and a wrong key is only surfaced by the browser.
+      assert.deepStrictEqual(session.payloadAt(0), {
+        action: 'callMcpTool',
+        server: 'github',
+        toolName: 'list_issues',
+        type: 'EXECUTE_TOOL',
+      });
+
+      session.emit('Opera.actionChunk', {
+        correlationId: 'c1',
+        chunk: 'found 3 issues',
+      });
+      session.emit('Opera.actionCompleted', {
+        correlationId: 'c1',
+        result: 'done',
+      });
+
+      await pending;
+      assert.deepStrictEqual(logs, ['found 3 issues']);
+      assert.deepStrictEqual(lines, ['done']);
+    });
+
+    it('passes parameters through only when provided', async () => {
+      const withParams = new FakeCDPSession().resolveWith({
+        correlationId: 'c1',
+      });
+      const pendingWith = operaCallMcpTool.handler(
+        makeRequest(withParams, {
+          server: 'github',
+          tool: 'create_issue',
+          parameters: {title: 'a bug'},
+        }),
+        makeResponse().response,
+        context,
+      );
+      await waitForStreamListeners(withParams);
+      assert.deepStrictEqual(withParams.payloadAt(0), {
+        action: 'callMcpTool',
+        server: 'github',
+        toolName: 'create_issue',
+        type: 'EXECUTE_TOOL',
+        parameters: {title: 'a bug'},
+      });
+      withParams.emit('Opera.actionCompleted', {
+        correlationId: 'c1',
+        result: 'done',
+      });
+      await pendingWith;
+
+      const withoutParams = new FakeCDPSession().resolveWith({
+        correlationId: 'c2',
+      });
+      const pendingWithout = operaCallMcpTool.handler(
+        makeRequest(withoutParams, {server: 'github', tool: 'list_issues'}),
+        makeResponse().response,
+        context,
+      );
+      await waitForStreamListeners(withoutParams);
+      assert.ok(!('parameters' in withoutParams.payloadAt(0)));
+      withoutParams.emit('Opera.actionCompleted', {
+        correlationId: 'c2',
+        result: 'done',
+      });
+      await pendingWithout;
     });
   });
 });

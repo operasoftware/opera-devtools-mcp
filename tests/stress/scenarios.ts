@@ -717,8 +717,14 @@ export const H1: Scenario = {
     // Close the last page from outside the product: a page a script opened is
     // allowed to close itself, the first page is not, so it is closed by id
     // first and the script-opened one closes itself afterwards.
+    //
+    // The body is a block so the call returns `undefined`: `evaluate_script`
+    // serializes its result with `JSON.stringify` (src/tools/script.ts), and
+    // `window.open()` returns a `Window`, which is circular and throws. The
+    // window opens either way, but the tool call itself fails — and a step
+    // asserted to exit 0 must be a step that succeeds.
     const opened = await runCliQuiet(
-      ['evaluate_script', '() => window.open("about:blank")'],
+      ['evaluate_script', '() => { window.open("about:blank"); }'],
       sessionId,
     );
     assert.strictEqual(

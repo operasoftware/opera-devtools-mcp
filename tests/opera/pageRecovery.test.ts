@@ -118,4 +118,26 @@ describe('pageRecovery', () => {
     // close would be served by the first recovery's result.
     assert.strictEqual(context.newPage.callCount, 2);
   });
+
+  it('clears a failed recovery so the next caller retries', async () => {
+    const {context, page} = stubContext();
+    Object.assign(page, {id: 9});
+    context.getSelectedMcpPage.throws(new Error('closed'));
+    context.newPage.onFirstCall().rejects(new Error('tab crashed'));
+
+    const first = stubResponse();
+    await assert.rejects(resolveSelectedPage(context, first), /tab crashed/);
+
+    // The single-flight entry is cleared by `.finally` on rejection — a failed
+    // recovery never poisons the entry, so the next caller opens a fresh page
+    // instead of being handed the dead promise.
+    context.newPage.onSecondCall().resolves(page);
+    const second = stubResponse();
+    assert.strictEqual(await resolveSelectedPage(context, second), page);
+
+    assert.strictEqual(context.newPage.callCount, 2);
+    assert.deepStrictEqual(second.lines, [
+      'Note: the browser had no open pages, so a new one was opened. Page 9 is now selected.',
+    ]);
+  });
 });

@@ -9,6 +9,7 @@ import {CDPSessionEvent, zod} from '../../third_party/index.js';
 import {ToolCategory} from '../../tools/categories.js';
 import {definePageTool} from '../../tools/ToolDefinition.js';
 import {withServiceWorkerRetry} from '../serviceWorkerRetry.js';
+import {operaAiStreamPolicy} from '../streamingTools.js';
 
 // NOTE: `createTools` in src/tools/tools.ts does `Object.values(...)` over this
 // module, so every export here must be a tool definition. Put helpers elsewhere.
@@ -64,8 +65,10 @@ const dispatchWithStreamedResponse = (
     const early: StreamedActionEvent[] = [];
     let correlationId: string | undefined;
     let settled = false;
+    let firstEventTimer: NodeJS.Timeout | undefined;
 
     const cleanup = () => {
+      clearTimeout(firstEventTimer);
       session.off('Opera.actionChunk', onChunk);
       session.off('Opera.actionCompleted', onCompleted);
       session.off('Opera.actionFailed', onFailed);
@@ -82,6 +85,12 @@ const dispatchWithStreamedResponse = (
       finish();
     };
 
+    /** Any event at all means the browser started the run; stop watching. */
+    const noteEvent = () => {
+      clearTimeout(firstEventTimer);
+      firstEventTimer = undefined;
+    };
+
     const apply = (event: StreamedActionEvent) => {
       if (settled) {
         return;
@@ -90,6 +99,7 @@ const dispatchWithStreamedResponse = (
       if (id !== correlationId) {
         return;
       }
+      noteEvent();
       if (event.kind === 'chunk') {
         const {chunk} = event.params as {chunk: string};
         onChunkCallback?.(chunk);
@@ -109,6 +119,9 @@ const dispatchWithStreamedResponse = (
         return;
       }
       if (correlationId === undefined) {
+        // Held, not attributable — but it is still the browser working, and
+        // attributing it later must not re-arm a deadline it already beat.
+        noteEvent();
         early.push(event);
         return;
       }
@@ -135,6 +148,20 @@ const dispatchWithStreamedResponse = (
       settle(() => reject(signal.reason));
       return;
     }
+
+    // Armed before the dispatch is sent, not before its ack: a browser that
+    // took the dispatch and did nothing with it — no ack, no events — is the
+    // same failure from here, and this is the only deadline that sees it.
+    const {firstEventTimeoutMs} = operaAiStreamPolicy;
+    firstEventTimer = setTimeout(() => {
+      settle(() =>
+        reject(
+          new Error(
+            `Opera did not start the ${String(payload['action'])} action: no progress was reported for ${Math.round(firstEventTimeoutMs / 1000)}s after the dispatch`,
+          ),
+        ),
+      );
+    }, firstEventTimeoutMs);
 
     withServiceWorkerRetry(() =>
       session.send('Opera.dispatchWithStreamedResponse', {payload}),

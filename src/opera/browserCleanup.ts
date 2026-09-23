@@ -62,6 +62,43 @@ export function killBrowserProcessGroup(pid: number | undefined): void {
 }
 
 /**
+ * Whether the teardown above must stay its hand — set while *we* close the
+ * browser.
+ *
+ * `disconnected` is not an abnormal-exit signal: Puppeteer's own `close()` ends
+ * with `disconnect()`, so a deliberate shutdown fires the same event a crash
+ * does. Killing the process group at that moment SIGKILLs a browser that is
+ * still flushing its profile — IndexedDB and LevelDB writes are done by its
+ * child storage utility, not by the browser process — and a store that loses
+ * those writes keeps records pointing at files that never landed. Blink reports
+ * the read of such a record as `NotReadableError: Data lost due to missing
+ * file. Affected record should be considered irrecoverable` (`indexeddb/`
+ * `idb_request_queue_item.cc`), and Opera AI's chat path then fails on every
+ * later run in that profile.
+ *
+ * So the group kill is armed for a browser that goes away without us closing
+ * it, and disarmed for the close we asked for.
+ *
+ * The flag lives in the watching handler's closure, not in module state: a
+ * handler for a browser we already closed can fire *after* the next launch has
+ * installed its own, and module state would then be read through the new cycle
+ * — an arm resets it to false, so the late handler for the deliberately closed
+ * browser sees "not ours" and SIGKILLs a group whose helpers may still be
+ * flushing that profile. One flag per armed handler means each browser's
+ * teardown answers only for its own close.
+ */
+let disarmActiveWatcher: (() => void) | undefined;
+
+/**
+ * Mark the teardown that follows as deliberate, so the `disconnected` it emits
+ * is not answered with a group kill. Called by both browser-closing paths in
+ * `src/browser.ts`, which are the only places that close a browser we launched.
+ */
+export function disarmBrowserOrphanCleanup(): void {
+  disarmActiveWatcher?.();
+}
+
+/**
  * Arm the browser's teardown: when it disconnects without closing, kill the
  * process group it left behind.
  *
@@ -72,11 +109,21 @@ export function killBrowserProcessGroup(pid: number | undefined): void {
  * is the whole job.
  *
  * Called from `ensureBrowserLaunched` right after `launch()`, which is the one
- * place in `src/browser.ts` that owns a launched browser.
+ * place in `src/browser.ts` that owns a launched browser. Each launch installs
+ * a fresh watcher with its own disarm flag, so a browser launched after a
+ * deliberate close is protected again — and the previous launch's watcher,
+ * which may fire afterwards, is still answered by its own flag.
  */
 export function watchBrowserForOrphans(browser: Browser): void {
   const pgid = browser.process()?.pid;
+  let disarmed = false;
+  disarmActiveWatcher = () => {
+    disarmed = true;
+  };
   browser.once('disconnected', () => {
+    if (disarmed) {
+      return;
+    }
     killBrowserProcessGroup(pgid);
   });
 }

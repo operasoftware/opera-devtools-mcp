@@ -18,9 +18,11 @@ import {
   recordShutdownReason,
 } from '../opera/daemonShutdown.js';
 import {
-  answerSocketMessage,
+  dispatchSocketMessage,
   reportStartupFailure,
 } from '../opera/daemonSocket.js';
+import {attachLogForwarding} from '../opera/daemonStreaming.js';
+import {callDaemonTool} from '../opera/daemonToolCall.js';
 import {superviseMcpServer} from '../opera/mcpServerSupervisor.js';
 import {
   Client,
@@ -164,6 +166,10 @@ async function setupMCPClient() {
   transport.onclose = () => mcpSupervisor.onTransportClosed(transport);
   await mcpClient.connect(transport);
 
+  // Opera AI tools stream their output as `notifications/message` chunks; the
+  // socket protocol carries them to the CLI. See `opera/daemonStreaming.ts`.
+  attachLogForwarding(mcpClient);
+
   console.log('MCP client connected');
 }
 
@@ -176,7 +182,7 @@ interface McpResult {
   content?: McpContent[] | string;
   text?: string;
 }
-async function handleRequest(msg: DaemonMessage) {
+async function handleRequest(msg: DaemonMessage, streamToken?: string) {
   try {
     if (msg.method === 'invoke_tool') {
       if (!mcpClient) {
@@ -184,9 +190,10 @@ async function handleRequest(msg: DaemonMessage) {
       }
       const {tool, args} = msg;
 
-      const result = (await mcpClient.callTool({
-        name: tool,
-        arguments: args || {},
+      const result = (await callDaemonTool(mcpClient, {
+        tool,
+        args,
+        streamToken,
       })) as McpResult | McpContent[];
 
       return {
@@ -248,7 +255,11 @@ async function startSocketServer() {
       const transport = new PipeTransport(socket, socket, puppeteerLogger);
       transport.onmessage = async (message: string) => {
         logger?.('onmessage', message);
-        const response = await answerSocketMessage(message, handleRequest);
+        const response = await dispatchSocketMessage(
+          message,
+          transport,
+          handleRequest,
+        );
         transport.send(JSON.stringify(response));
         socket.end();
       };

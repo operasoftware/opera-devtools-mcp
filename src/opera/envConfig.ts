@@ -253,6 +253,13 @@ export function applyEnvToArgv(argv: string[]): void {
   if (
     userDataDir &&
     !attachesToBrowser &&
+    // An explicit `--isolated` asks for a throwaway profile, and yargs treats
+    // the two as mutually exclusive. The CLI wins here as it does everywhere
+    // else in this file: injecting the configured dir alongside `--isolated`
+    // made the MCP server exit during argument parsing ("Connection closed" to
+    // the daemon, which then tore down), and the next command silently started
+    // a daemon on the persistent profile instead.
+    !hasArg(argv, '--isolated') &&
     !hasArg(argv, '--userDataDir', '--user-data-dir')
   ) {
     argv.push(`--userDataDir=${userDataDir}`);

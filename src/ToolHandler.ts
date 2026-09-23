@@ -347,6 +347,10 @@ export class ToolHandler {
         isError: true,
       };
     } finally {
+      // Before telemetry and the mutex release: the claim `beforeInvoke` took
+      // has to be released even when the invocation failed, or the next Opera
+      // AI tool waits on a browser this one only looks like it is using.
+      this.hooks?.afterInvoke(this.tool);
       void ClearcutLogger.get()?.logToolInvocation({
         toolName: this.tool.name,
         params,
