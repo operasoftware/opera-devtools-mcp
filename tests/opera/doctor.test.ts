@@ -40,6 +40,7 @@ import {
 import {writeConfigFile} from '../../src/opera/config.js';
 import {getConfigFile, getStateDir} from '../../src/opera/envConfig.js';
 import {VERSION} from '../../src/version.js';
+import {pinHome, restoreHome} from '../fake-home.js';
 
 const OPERA_ENV_KEYS = [
   'OPERA_CLI_EXECUTABLE_PATH',
@@ -47,6 +48,14 @@ const OPERA_ENV_KEYS = [
   'OPERA_CLI_USER_DATA_DIR',
   'OPERA_CLI_HEADED',
 ];
+
+/**
+ * Where Windows detection and profile lookup look: `LOCALAPPDATA`/`PROGRAMFILES`
+ * hold the install roots, `APPDATA` the per-user profile. A runner's real ones
+ * name the real user's folders, so a test that plants a browser under its own
+ * temp home has to redirect them there.
+ */
+const WINDOWS_ENV_KEYS = ['LOCALAPPDATA', 'PROGRAMFILES', 'APPDATA'];
 
 describe('formatBytes', () => {
   it('scales to the largest unit that fits', () => {
@@ -60,21 +69,23 @@ describe('doctor', () => {
   let home: string;
   let runtimeDir: string;
   let sessionId: string;
-  let saved: {HOME?: string; XDG_RUNTIME_DIR?: string};
+  let savedHome: Record<string, string | undefined>;
+  let savedRuntimeDir: string | undefined;
   let savedOperaEnv: Record<string, string | undefined>;
+  let savedWindowsEnv: Record<string, string | undefined>;
 
   beforeEach(() => {
     home = mkdtempSync(join(tmpdir(), 'opera-doctor-home-'));
     runtimeDir = mkdtempSync(join(tmpdir(), 'opera-doctor-run-'));
     sessionId = crypto.randomUUID();
-    saved = {
-      HOME: process.env.HOME,
-      XDG_RUNTIME_DIR: process.env.XDG_RUNTIME_DIR,
-    };
     savedOperaEnv = Object.fromEntries(
       OPERA_ENV_KEYS.map(key => [key, process.env[key]]),
     );
-    process.env.HOME = home;
+    savedWindowsEnv = Object.fromEntries(
+      WINDOWS_ENV_KEYS.map(key => [key, process.env[key]]),
+    );
+    savedHome = pinHome(home);
+    savedRuntimeDir = process.env.XDG_RUNTIME_DIR;
     process.env.XDG_RUNTIME_DIR = runtimeDir;
     // A real machine's config must not decide what `doctor` reports here.
     for (const key of OPERA_ENV_KEYS) {
@@ -83,27 +94,28 @@ describe('doctor', () => {
   });
 
   afterEach(() => {
-    if (saved.HOME === undefined) {
-      delete process.env.HOME;
-    } else {
-      process.env.HOME = saved.HOME;
-    }
-    if (saved.XDG_RUNTIME_DIR === undefined) {
+    restoreHome(savedHome);
+    if (savedRuntimeDir === undefined) {
       delete process.env.XDG_RUNTIME_DIR;
     } else {
-      process.env.XDG_RUNTIME_DIR = saved.XDG_RUNTIME_DIR;
+      process.env.XDG_RUNTIME_DIR = savedRuntimeDir;
     }
-    for (const key of OPERA_ENV_KEYS) {
-      const value = savedOperaEnv[key];
+    restoreEnv(savedOperaEnv);
+    restoreEnv(savedWindowsEnv);
+    rmSync(home, {recursive: true, force: true});
+    rmSync(runtimeDir, {recursive: true, force: true});
+  });
+
+  /** Put back the variables a test replaced, dropping the ones it unset. */
+  function restoreEnv(saved: Record<string, string | undefined>): void {
+    for (const [key, value] of Object.entries(saved)) {
       if (value === undefined) {
         delete process.env[key];
       } else {
         process.env[key] = value;
       }
     }
-    rmSync(home, {recursive: true, force: true});
-    rmSync(runtimeDir, {recursive: true, force: true});
-  });
+  }
 
   function check(name: string, checks: DoctorCheck[]): DoctorCheck {
     const found = checks.find(candidate => candidate.name === name);
@@ -360,6 +372,12 @@ describe('doctor', () => {
       async () => {
         // A browser where detection looks, which is the only way this repair
         // fires: a machine that has already been configured takes the other path.
+        // Windows detection composes its candidates from these environment
+        // roots, so a planted browser is only findable once they name this
+        // test's home rather than the runner's own folders.
+        process.env.LOCALAPPDATA = join(home, 'AppData', 'Local');
+        process.env.PROGRAMFILES = join(home, 'Program Files');
+        process.env.APPDATA = join(home, 'AppData', 'Roaming');
         const relative =
           process.platform === 'darwin'
             ? join(
@@ -371,9 +389,7 @@ describe('doctor', () => {
                 'Opera',
               )
             : join(
-                home,
-                'AppData',
-                'Local',
+                process.env.LOCALAPPDATA,
                 'Programs',
                 'Opera Neon',
                 'opera.exe',

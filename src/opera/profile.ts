@@ -62,7 +62,14 @@ export function defaultProfileDir(
   const build = browserDisplayName(browserPath ?? '');
   let candidate: string;
   if (platform === 'darwin') {
-    candidate = `${home}/Library/Application Support/${MAC_BUNDLE_ID[build]}`;
+    // Joined, not interpolated: the returned path is compared and printed, and
+    // a caller on the same machine builds the same location with `path.join`.
+    candidate = join(
+      home,
+      'Library',
+      'Application Support',
+      MAC_BUNDLE_ID[build],
+    );
   } else if (platform === 'win32') {
     const appData = env.APPDATA ?? `${home}\\AppData\\Roaming`;
     candidate = `${appData}\\Opera Software\\${build}`;

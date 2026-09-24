@@ -15,7 +15,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import {tmpdir} from 'node:os';
-import {join} from 'node:path';
+import {basename, join} from 'node:path';
 import {afterEach, beforeEach, describe, it} from 'node:test';
 import {setTimeout as delay} from 'node:timers/promises';
 
@@ -108,7 +108,11 @@ describe('handleLogs', () => {
     const output = await handleLogs([], sessionId);
 
     assert.ok(output.includes('no log file yet'), output);
-    assert.ok(output.includes(logFile), output);
+    // TOON escapes the backslashes of a Windows path, so the assertion is on
+    // the separator-free tail of the path it reports: the session's runtime
+    // home and the log's file name.
+    assert.ok(output.includes(basename(getRuntimeHome(sessionId))), output);
+    assert.ok(output.includes(basename(logFile)), output);
     assert.ok(output.includes('opera-browser-cli start'), output);
   });
 

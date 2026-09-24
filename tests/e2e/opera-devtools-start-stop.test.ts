@@ -18,6 +18,22 @@ import {
 } from '../utils.js';
 import {CLI_BIN_NAME} from '../../src/opera/branding.js';
 
+/**
+ * The args the daemon hands the MCP server, read back from `status`.
+ *
+ * The line is JSON, so a Windows path arrives there with escaped backslashes:
+ * comparing a path against the raw stdout misses on Windows only. Parsing the
+ * line is what makes the assertions below platform-independent, and it is what
+ * `status` prints the array for.
+ */
+function daemonArgs(stdout: string): string[] {
+  const line = stdout
+    .split('\n')
+    .find(candidate => candidate.startsWith('args='));
+  assert.ok(line, `no args line in the status output:\n${stdout}`);
+  return JSON.parse(line.slice('args='.length)) as string[];
+}
+
 describe(CLI_BIN_NAME, () => {
   let sessionId: string;
 
@@ -131,10 +147,11 @@ describe(CLI_BIN_NAME, () => {
       // missing headless flag into `--headless=false` from the same config. A
       // serialized `--headless`/`--isolated` here is the CLI's own start
       // default overriding the config before the MCP server can read it.
+      const daemonArgv = daemonArgs(statusResult.stdout);
       assert.ok(
-        statusResult.stdout.includes(`--user-data-dir=${userDataDir}`) &&
-          !statusResult.stdout.includes('--isolated') &&
-          !statusResult.stdout.includes('--headless'),
+        daemonArgv.includes(`--user-data-dir=${userDataDir}`) &&
+          !daemonArgv.includes('--isolated') &&
+          !daemonArgv.includes('--headless'),
         `configured browser options were not honoured: ${statusResult.stdout}`,
       );
 
@@ -149,7 +166,7 @@ describe(CLI_BIN_NAME, () => {
       );
       const headlessStatus = await runCli(['status'], sessionId, headlessEnv);
       assert.ok(
-        headlessStatus.stdout.includes('--headless'),
+        daemonArgs(headlessStatus.stdout).includes('--headless'),
         `OPERA_CLI_HEADED=0 was not honoured: ${headlessStatus.stdout}`,
       );
     } finally {

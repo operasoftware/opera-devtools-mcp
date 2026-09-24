@@ -14,6 +14,7 @@
  */
 
 import {existsSync} from 'node:fs';
+import {join} from 'node:path';
 
 /** The Opera builds this module can name. */
 export type OperaBuild =
@@ -25,11 +26,33 @@ export function neonCandidatePaths(
   env: NodeJS.ProcessEnv = process.env,
 ): string[] {
   if (platform === 'darwin') {
+    // `/Applications` is a literal macOS path; the `~/Applications` root is
+    // joined so it carries this host's separators, matching what a caller
+    // locating the same install with `path.join` builds. The pair is dropped
+    // for an empty home, where it would be the absolute paths over again.
     return [
       '/Applications/Opera Neon Developer.app/Contents/MacOS/Opera',
       '/Applications/Opera Neon.app/Contents/MacOS/Opera',
-      `${home}/Applications/Opera Neon Developer.app/Contents/MacOS/Opera`,
-      `${home}/Applications/Opera Neon.app/Contents/MacOS/Opera`,
+      ...(home === ''
+        ? []
+        : [
+            join(
+              home,
+              'Applications',
+              'Opera Neon Developer.app',
+              'Contents',
+              'MacOS',
+              'Opera',
+            ),
+            join(
+              home,
+              'Applications',
+              'Opera Neon.app',
+              'Contents',
+              'MacOS',
+              'Opera',
+            ),
+          ]),
     ];
   }
   if (platform === 'win32') {
@@ -55,8 +78,26 @@ export function operaCandidatePaths(
     return [
       '/Applications/Opera GX.app/Contents/MacOS/Opera',
       '/Applications/Opera.app/Contents/MacOS/Opera',
-      `${home}/Applications/Opera GX.app/Contents/MacOS/Opera`,
-      `${home}/Applications/Opera.app/Contents/MacOS/Opera`,
+      ...(home === ''
+        ? []
+        : [
+            join(
+              home,
+              'Applications',
+              'Opera GX.app',
+              'Contents',
+              'MacOS',
+              'Opera',
+            ),
+            join(
+              home,
+              'Applications',
+              'Opera.app',
+              'Contents',
+              'MacOS',
+              'Opera',
+            ),
+          ]),
     ];
   }
   if (platform === 'win32') {
@@ -113,9 +154,9 @@ export function detectBrowsers(
   const found: DetectedBrowser[] = [];
   const seen = new Set<string>();
   for (const path of [...neon, ...operaCandidatePaths(platform, home, env)]) {
-    // `home` defaults to '', which collapses the `${home}/Applications`
-    // candidates onto the absolute ones; without this check the same install
-    // would be reported twice.
+    // A caller may pass a home whose `Applications` root is the same directory
+    // as `/Applications`; without this check the same install would be reported
+    // twice.
     if (seen.has(path) || !exists(path)) {
       continue;
     }

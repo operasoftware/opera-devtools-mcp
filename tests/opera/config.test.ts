@@ -301,7 +301,15 @@ describe('config file round-trip', () => {
 
     updateConfigFile({OPERA_CLI_BROWSER_URL: 'http://x'}, home);
 
-    assert.strictEqual(fs.statSync(file).mode & 0o777, 0o600);
+    // Windows has no POSIX permission bits to assert on: `statSync().mode`
+    // reports the read-only attribute rather than the mode a write asked for.
+    if (process.platform !== 'win32') {
+      assert.strictEqual(fs.statSync(file).mode & 0o777, 0o600);
+    }
+    assert.strictEqual(
+      readConfigFile(file)['OPERA_CLI_BROWSER_URL'],
+      'http://x',
+    );
   });
 });
 

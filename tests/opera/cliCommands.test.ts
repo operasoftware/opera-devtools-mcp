@@ -31,6 +31,7 @@ import {
 } from '../../src/opera/cliCommands.js';
 import {getDaemonLogPath} from '../../src/opera/daemonLog.js';
 import {yargs} from '../../src/third_party/index.js';
+import {pinHome, restoreHome} from '../fake-home.js';
 
 type Frame = Record<string, unknown>;
 
@@ -102,7 +103,7 @@ describe('the fork commands through yargs', () => {
   let runtimeDir: string;
   let savedRuntimeDir: string | undefined;
   let home: string;
-  let savedHome: string | undefined;
+  let savedHome: Record<string, string | undefined>;
   let sessionId: string;
 
   beforeEach(() => {
@@ -110,8 +111,7 @@ describe('the fork commands through yargs', () => {
     savedRuntimeDir = process.env.XDG_RUNTIME_DIR;
     process.env.XDG_RUNTIME_DIR = runtimeDir;
     home = mkdtempSync(join(tmpdir(), 'opera-cli-cmd-home-'));
-    savedHome = process.env.HOME;
-    process.env.HOME = home;
+    savedHome = pinHome(home);
     sessionId = crypto.randomUUID();
   });
 
@@ -122,11 +122,7 @@ describe('the fork commands through yargs', () => {
     } else {
       process.env.XDG_RUNTIME_DIR = savedRuntimeDir;
     }
-    if (savedHome === undefined) {
-      delete process.env.HOME;
-    } else {
-      process.env.HOME = savedHome;
-    }
+    restoreHome(savedHome);
     rmSync(runtimeDir, {recursive: true, force: true});
     rmSync(home, {recursive: true, force: true});
   });

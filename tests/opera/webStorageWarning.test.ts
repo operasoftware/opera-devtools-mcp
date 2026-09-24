@@ -137,10 +137,16 @@ describe('Node Web Storage warning', () => {
     try {
       const result = await run([
         `--localstorage-file=${path.join(dir, 'storage')}`,
-        `--import=${GUARD_PATH}`,
+        // The file URL, not the path: the ESM loader takes a file path on
+        // POSIX but rejects a Windows path as an unsupported scheme, which
+        // would kill the child before it printed anything. The preload
+        // `preloadWebStorageWarningGuardInChildren` hands out is a URL for the
+        // same reason.
+        `--import=${pathToFileURL(GUARD_PATH).href}`,
         '-e',
         'console.log(typeof globalThis.localStorage);',
       ]);
+      assert.strictEqual(result.status, 0, result.stderr);
       assert.strictEqual(result.stdout.trim(), 'object');
       assert.ok(!result.stderr.includes(WARNING), result.stderr);
     } finally {

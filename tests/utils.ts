@@ -36,6 +36,7 @@ import {DevTools} from '../src/third_party/index.js';
 import {stableIdSymbol} from '../src/utils/id.js';
 
 import {createMockPuppeteerPage, mockListener} from './mocks.js';
+import {HOME_ENV_KEYS} from './fake-home.js';
 
 export function assertNoServiceWorkerReported(targets: Target[], id: string) {
   const target = targets.find(target => {
@@ -425,10 +426,11 @@ export const CLI_PATH = path.resolve('build/src/bin', `${CLI_BIN_NAME}.js`);
  * `--userDataDir` and `--headless=false`, which conflict with `--isolated`
  * and cause "browser is already running" / "Connection closed" failures.
  *
- * This strips every `OPERA_CLI_*` var, points `HOME` at a throwaway temp dir
- * (so `loadOperaCliConfig` finds no config file), and sets
- * `OPERA_CLI_EXECUTABLE_PATH` to the bundled Puppeteer Chrome so the daemon
- * can launch a headless browser without auto-detecting a real Opera install.
+ * This strips every `OPERA_CLI_*` var, points the home at a throwaway temp dir
+ * — both the variables `os.homedir()` reads, so `loadOperaCliConfig` finds no
+ * config file on any platform — and sets `OPERA_CLI_EXECUTABLE_PATH` to the
+ * bundled Puppeteer Chrome so the daemon can launch a headless browser without
+ * auto-detecting a real Opera install.
  */
 const cliTestHome = fs.mkdtempSync(path.join(os.tmpdir(), 'opera-test-home-'));
 
@@ -456,7 +458,9 @@ export async function createCliEnv(): Promise<Record<string, string>> {
     }
     env[key] = value;
   }
-  env.HOME = cliTestHome;
+  for (const key of HOME_ENV_KEYS) {
+    env[key] = cliTestHome;
+  }
   if (cliExecutablePathCache) {
     env.OPERA_CLI_EXECUTABLE_PATH = cliExecutablePathCache;
   }

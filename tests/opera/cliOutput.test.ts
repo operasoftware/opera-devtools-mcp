@@ -35,6 +35,7 @@ import {
   EXIT_CODES,
 } from '../../src/opera/cdpErrors.js';
 import type {CallToolResult} from '../../src/third_party/index.js';
+import {pinHome, restoreHome} from '../fake-home.js';
 
 /**
  * A response shaped like the MCP server's: a preamble, then the snapshot
@@ -61,20 +62,15 @@ const TEST_SESSION = 'a1b2c3d4';
 
 describe('cliOutput', () => {
   let home: string;
-  let savedHome: string | undefined;
+  let savedHome: Record<string, string | undefined>;
 
   beforeEach(() => {
     home = mkdtempSync(join(tmpdir(), 'opera-cli-output-'));
-    savedHome = process.env.HOME;
-    process.env.HOME = home;
+    savedHome = pinHome(home);
   });
 
   afterEach(() => {
-    if (savedHome === undefined) {
-      delete process.env.HOME;
-    } else {
-      process.env.HOME = savedHome;
-    }
+    restoreHome(savedHome);
     rmSync(home, {recursive: true, force: true});
   });
 
@@ -527,8 +523,7 @@ describe('cliOutput', () => {
 describe('cliOutput failure isolation', () => {
   it('creates the state dir when a machine was configured only through the environment', () => {
     const home = mkdtempSync(join(tmpdir(), 'opera-cli-state-'));
-    const saved = process.env.HOME;
-    process.env.HOME = home;
+    const saved = pinHome(home);
     try {
       // No `.opera-browser-cli` yet: autoconfiguration never ran.
       writeUrlMapSidecar(new Map([['$u2', '/b']]), TEST_SESSION, null);
@@ -539,11 +534,7 @@ describe('cliOutput failure isolation', () => {
         $u2: '/b',
       });
     } finally {
-      if (saved === undefined) {
-        delete process.env.HOME;
-      } else {
-        process.env.HOME = saved;
-      }
+      restoreHome(saved);
       rmSync(home, {recursive: true, force: true});
     }
   });
@@ -552,8 +543,7 @@ describe('cliOutput failure isolation', () => {
     // A HOME under a regular file, so the state dir cannot be created at all.
     const pen = join(mkdtempSync(join(tmpdir(), 'opera-cli-pen-')), 'file');
     writeFileSync(pen, '');
-    const saved = process.env.HOME;
-    process.env.HOME = join(pen, 'nested');
+    const saved = pinHome(join(pen, 'nested'));
 
     try {
       assert.doesNotThrow(() =>
@@ -561,11 +551,7 @@ describe('cliOutput failure isolation', () => {
       );
       assert.strictEqual(loadUrlMapSidecar(TEST_SESSION), null);
     } finally {
-      if (saved === undefined) {
-        delete process.env.HOME;
-      } else {
-        process.env.HOME = saved;
-      }
+      restoreHome(saved);
       rmSync(join(pen, '..'), {recursive: true, force: true});
     }
   });

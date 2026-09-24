@@ -15,7 +15,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import {tmpdir} from 'node:os';
-import {dirname, join} from 'node:path';
+import {basename, dirname, join} from 'node:path';
 import {PassThrough} from 'node:stream';
 import {afterEach, beforeEach, describe, it} from 'node:test';
 import {fileURLToPath} from 'node:url';
@@ -126,9 +126,12 @@ describe('setupNonInteractive', () => {
     const config = readConfig();
     assert.match(config, /^OPERA_CLI_EXECUTABLE_PATH="\/opt\/opera"$/m);
     assert.match(config, /^OPERA_CLI_HEADED="1"$/m);
-    assert.match(
+    // No real profile to adopt, so the CLI falls back to its own state dir.
+    assert.ok(
+      config.includes(
+        `OPERA_CLI_USER_DATA_DIR="${join(home, '.opera-browser-cli', 'profile')}"`,
+      ),
       config,
-      /^OPERA_CLI_USER_DATA_DIR=".+opera-browser-cli\/profile"$/m,
     );
     // The settings block is structured output, the help block is prose.
     assert.ok(output.includes('config:'), output);
@@ -174,8 +177,11 @@ describe('setupNonInteractive', () => {
     );
 
     if (detected) {
+      // The settings block is TOON: a Windows path is quoted there, with its
+      // backslashes escaped, so the assertion is on the parts that survive.
       assert.ok(
-        output.includes(`OPERA_CLI_EXECUTABLE_PATH: ${detected.path}`),
+        output.includes('OPERA_CLI_EXECUTABLE_PATH:') &&
+          output.includes(basename(detected.path)),
         `detected ${detected.path} but the output does not record it:\n${output}`,
       );
       assert.ok(!output.includes('No Opera installation found'), output);
