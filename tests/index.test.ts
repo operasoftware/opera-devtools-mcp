@@ -21,6 +21,8 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import {executablePath} from 'puppeteer';
 
+import {createCliEnv} from './utils.js';
+
 import {mcpOptions} from '../src/config/mcp-options.js';
 import {getOffByDefaultCategories} from '../src/config/category-options.js';
 import type {ToolCategory} from '../src/tools/categories.js';
@@ -44,7 +46,10 @@ describe('e2e', () => {
           await executablePath(),
           ...extraArgs,
         ],
-        env: {...process.env, OPERA_DEVTOOLS_NO_USAGE_STATISTICS: 'true'},
+        env: {
+          ...(await createCliEnv()),
+          OPERA_DEVTOOLS_NO_USAGE_STATISTICS: 'true',
+        },
       });
       const client = new Client(
         {

@@ -179,7 +179,20 @@ export const ExperimentName = {
   }
 
   copyDevToolsDescriptionFiles();
+  copyOperaSkills();
   makeBinScriptsExecutable();
+}
+
+/**
+ * Copies the CLI's agent skill beside the compiled modules. `tsc` emits only
+ * `.ts`, so without this `build/src/opera/skills/SKILL.md` — where `setup`
+ * looks for it and where the package publishes it (see `package.json`
+ * `files`) — would not exist.
+ */
+function copyOperaSkills(): void {
+  const sourceDir = path.join(process.cwd(), 'src', 'opera', 'skills');
+  const destDir = path.join(BUILD_DIR, 'src', 'opera', 'skills');
+  fs.cpSync(sourceDir, destDir, {recursive: true});
 }
 
 /**

@@ -10,15 +10,7 @@
 
 import process from 'node:process';
 
-import type {Options, PositionalOptions} from 'yargs';
-
-import {
-  startDaemon,
-  stopDaemon,
-  sendCommand,
-  handleResponse,
-  verifyDaemonVersion,
-} from '../daemon/client.js';
+import {startDaemon, stopDaemon, sendCommand} from '../daemon/client.js';
 import type {DaemonStatusResult} from '../daemon/types.js';
 import {
   isDaemonRunning,
@@ -27,7 +19,13 @@ import {
 } from '../daemon/utils.js';
 import {logDisclaimers} from '../index.js';
 import {CLI_BIN_NAME, MCP_BIN_NAME, PACKAGE_NAME} from '../opera/branding.js';
-import {hideBin, yargs, type CallToolResult} from '../third_party/index.js';
+import {describeBrowserMode} from '../opera/browserFlags.js';
+import {EXIT_CODES} from '../opera/cdpErrors.js';
+import {
+  registerOperaCommands,
+  registerToolCommand,
+} from '../opera/cliCommands.js';
+import {hideBin, yargs} from '../third_party/index.js';
 import {checkForUpdates} from '../utils/check-for-updates.js';
 import {VERSION} from '../version.js';
 
@@ -100,14 +98,14 @@ const y = yargs(hideBin(process.argv))
       ) {
         console.error('\n=========================================');
         console.error('💡 TIP FOR AI AGENT / DEVELOPER:');
-        console.error('In the `chrome-devtools` CLI:');
+        console.error(`In the \`${CLI_BIN_NAME}\` CLI:`);
         console.error(
           '1. Required parameters MUST be passed as positional arguments (without flags).',
         );
         console.error(
-          '   - INCORRECT: chrome-devtools click --pageId 1 --uid "1_2"',
+          `   - INCORRECT: ${CLI_BIN_NAME} click --pageId 1 --uid "1_2"`,
         );
-        console.error('   - CORRECT:   chrome-devtools click 1 "1_2"');
+        console.error(`   - CORRECT:   ${CLI_BIN_NAME} click 1 "1_2"`);
         console.error(
           '2. Optional parameters are passed as double-dash options/flags (e.g. --dblClick true).',
         );
@@ -115,14 +113,16 @@ const y = yargs(hideBin(process.argv))
           '3. Make sure to escape quotes properly for your shell environment.',
         );
         console.error(
-          'Run `chrome-devtools <command> --help` to see exact positional and optional parameters.',
+          `Run \`${CLI_BIN_NAME} <command> --help\` to see exact positional and optional parameters.`,
         );
         console.error('=========================================');
       }
     } else if (err) {
       console.error(err);
     }
-    process.exit(1);
+    // A parse failure is exactly what exit code 2 means — "fix the command" — so
+    // it is reported as one rather than as an unknown failure.
+    process.exit(msg ? EXIT_CODES.VALIDATION_ERROR : EXIT_CODES.UNKNOWN);
   });
 
 y.command(
@@ -182,10 +182,13 @@ y.command(
         console.log(
           `pid=${data.pid} socket=${data.socketPath} start-date=${data.startDate} version=${data.version}`,
         );
+        // Who owns the browser decides what recovery to expect from it: we
+        // relaunch what we launched, and never touch a browser we attached to.
+        console.log(`browser=${describeBrowserMode(data.args)}`);
         console.log(`args=${JSON.stringify(data.args)}`);
         if (data.version !== VERSION) {
           console.warn(
-            `Warning: Daemon server version (${data.version}) does not match CLI version (${VERSION}). Run 'chrome-devtools start' to update and restart the daemon.`,
+            `Warning: Daemon server version (${data.version}) does not match CLI version (${VERSION}). Run '${CLI_BIN_NAME} start' to update and restart the daemon.`,
           );
         }
       } else {
@@ -213,122 +216,14 @@ y.command(
   },
 );
 
+// The fork's own commands (`setup`, `doctor`, `logs`, `url`) and the wrapper
+// that turns a generated tool definition into a runnable command live in
+// `src/opera/cliCommands.ts`, along with the exit-code and streaming plumbing
+// of a tool call. `start` stays here: it is upstream's, and prepends `--viaCli`.
+registerOperaCommands(y, {start});
+
 for (const [commandName, commandDef] of Object.entries(commands)) {
-  const args = commandDef.args;
-  const requiredArgNames = Object.keys(args).filter(
-    name => args[name].required,
-  );
-
-  const optionalArgNames = Object.keys(args).filter(
-    name => !args[name].required,
-  );
-
-  let commandStr = commandName;
-  for (const arg of requiredArgNames) {
-    commandStr += ` <${arg}>`;
-  }
-
-  for (const arg of optionalArgNames) {
-    commandStr += ` [--${arg}]`;
-  }
-
-  y.command(
-    commandStr,
-    commandDef.description,
-    y => {
-      y.option('output-format', {
-        choices: ['md', 'json'],
-        default: 'md',
-      });
-      for (const [argName, opt] of Object.entries(args)) {
-        const type =
-          opt.type === 'integer' || opt.type === 'number'
-            ? 'number'
-            : opt.type === 'boolean'
-              ? 'boolean'
-              : opt.type === 'array'
-                ? 'array'
-                : 'string';
-
-        if (opt.required) {
-          const options: PositionalOptions = {
-            describe: opt.description,
-            type: type as PositionalOptions['type'],
-          };
-          if (opt.default !== undefined) {
-            options.default = opt.default;
-          }
-          if (opt.enum) {
-            options.choices = opt.enum as Array<string | number>;
-          }
-          y.positional(argName, options);
-        } else {
-          const options: Options = {
-            describe: opt.description,
-            type: type as Options['type'],
-          };
-          if (opt.default !== undefined) {
-            options.default = opt.default;
-          }
-          if (opt.enum) {
-            options.choices = opt.enum as Array<string | number>;
-          }
-          y.option(argName, options);
-        }
-      }
-    },
-    async argv => {
-      const sessionId = argv.sessionId as string;
-      try {
-        const versionWarningPromise = isDaemonRunning(sessionId)
-          ? verifyDaemonVersion(sessionId, VERSION)
-          : Promise.resolve(undefined);
-
-        if (!isDaemonRunning(sessionId)) {
-          await start(serializeArgs(mcpOptions, argv), sessionId);
-        }
-
-        const commandArgs: Record<string, unknown> = {};
-        for (const argName of Object.keys(args)) {
-          if (argName in argv) {
-            commandArgs[argName] = argv[argName];
-          }
-        }
-
-        const response = await sendCommand(
-          {
-            method: 'invoke_tool',
-            tool: commandName,
-            args: commandArgs,
-          },
-          sessionId,
-        );
-
-        if (response.success) {
-          console.log(
-            await handleResponse(
-              JSON.parse(response.result) as unknown as CallToolResult,
-              argv['output-format'] as 'json' | 'md',
-            ),
-          );
-        } else {
-          console.error('Error:', response.error);
-        }
-
-        const versionWarning = await versionWarningPromise;
-        if (versionWarning) {
-          console.warn(versionWarning);
-        }
-
-        if (!response.success) {
-          process.exit(1);
-        }
-      } catch (error) {
-        console.error('Failed to execute command:', error);
-        process.exit(1);
-      }
-    },
-  );
+  registerToolCommand(y, commandName, commandDef, {start});
 }
 
 await y.parse();

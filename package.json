@@ -4,8 +4,7 @@
   "description": "MCP server for Opera DevTools",
   "type": "module",
   "bin": {
-    "opera-devtools-mcp": "./build/src/bin/opera-devtools-mcp.js",
-    "opera-devtools": "./build/src/bin/opera-devtools.js"
+    "opera-devtools-mcp": "./build/src/bin/opera-devtools-mcp.js"
   },
   "main": "./build/src/index.js",
   "scripts": {
@@ -17,6 +16,8 @@
     "format": "eslint --cache --fix . && prettier --write --cache .",
     "check-format": "eslint --cache . && prettier --check --cache .;",
     "gen": "npm run build && npm run docs:generate && npm run cli:generate && npm run update-metrics && npm run format",
+    "link": "node scripts/link.ts",
+    "link:cli": "node scripts/link.ts --with-cli",
     "docs:generate": "node scripts/generate-docs.ts",
     "start": "npm run build && node build/src/bin/opera-devtools-mcp.js",
     "start-debug": "DEBUG=mcp:* DEBUG_COLORS=false npm run build && node build/src/bin/opera-devtools-mcp.js",
@@ -35,7 +36,9 @@
     "eval": "npm run build && node scripts/eval_gemini.ts",
     "count-tokens": "node scripts/count_tokens.ts",
     "profile": "npm run build && node scripts/profile/profile_mcp.ts",
-    "test:memory": "npm run build && node scripts/profile/profile_mcp.ts --threshold-percentage 1"
+    "test:memory": "npm run build && node scripts/profile/profile_mcp.ts --threshold-percentage 1",
+    "test:stress": "npm run build && STRESS_ALLOW_PROCESS_KILLS=true node --import ./build/tests/setup.js --test --test-force-exit --test-timeout=600000 build/tests/stress/runner.test.js",
+    "test:stress:docker": "node scripts/stress-docker.js"
   },
   "files": [
     "build/src",
@@ -51,6 +54,9 @@
   },
   "homepage": "https://github.com/operasoftware/opera-devtools-mcp#readme",
   "mcpName": "io.github.operasoftware/opera-devtools-mcp",
+  "dependencies": {
+    "@toon-format/toon": "^4.1.0"
+  },
   "devDependencies": {
     "@blackwell-systems/gcf": "^2.2.2",
     "@eslint/js": "^10.0.1",
@@ -60,7 +66,6 @@
     "@rollup/plugin-json": "^6.1.0",
     "@rollup/plugin-node-resolve": "^16.0.3",
     "@stylistic/eslint-plugin": "^5.4.0",
-    "@toon-format/toon": "^4.1.0",
     "@types/filesystem": "^0.0.36",
     "@types/node": "^26.0.0",
     "@types/semver": "^7.7.1",
@@ -87,13 +92,9 @@
     "zod": "^3.25.76"
   },
   "peerDependencies": {
-    "@blackwell-systems/gcf": "^2.2.2",
-    "@toon-format/toon": "^4.1.0"
+    "@blackwell-systems/gcf": "^2.2.2"
   },
   "peerDependenciesMeta": {
-    "@toon-format/toon": {
-      "optional": true
-    },
     "@blackwell-systems/gcf": {
       "optional": true
     }

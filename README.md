@@ -10,7 +10,7 @@ control and inspect a live browser. It acts as a Model-Context-Protocol
 DevTools for reliable automation, in-depth debugging, and performance analysis.
 When connected to Opera Neon, it also exposes Opera's built-in AI capabilities.
 
-## [Tool reference](./docs/tool-reference.md) | [Changelog](./CHANGELOG.md) | [Contributing](./CONTRIBUTING.md) | [Troubleshooting](./docs/troubleshooting.md) | [Design Principles](./docs/design-principles.md)
+## [Tool reference](./docs/tool-reference.md) | [Changelog](./CHANGELOG.md) | [Contributing](./CONTRIBUTING.md) | [Troubleshooting](./docs/troubleshooting.md) | [Design Principles](./docs/design-principles.md) | [Stress testing](./docs/stress-testing.md)
 
 ## Key features
 

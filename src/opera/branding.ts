@@ -19,8 +19,11 @@ export const PACKAGE_NAME = 'opera-devtools-mcp';
 /** MCP server binary / daemon app name, also used as `process.title`. */
 export const MCP_BIN_NAME = PACKAGE_NAME;
 
-/** CLI binary name, e.g. `opera-devtools start`. */
-export const CLI_BIN_NAME = 'opera-devtools';
+/** CLI binary name, e.g. `opera-browser-cli start`. The fork's sole CLI. */
+export const CLI_BIN_NAME = 'opera-browser-cli';
+
+/** Directory under `$HOME` holding the per-user config file (matches the CLI binary name). */
+export const STATE_DIR_NAME = '.opera-browser-cli';
 
 /** Human-readable product name used in log lines. */
 export const PRODUCT_NAME = 'Opera DevTools MCP Server';

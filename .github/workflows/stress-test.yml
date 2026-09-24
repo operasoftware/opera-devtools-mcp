@@ -1,0 +1,125 @@
+name: Stress test (process lifecycle)
+
+# The suite kills daemons, MCP servers and browsers, so it runs in a disposable
+# container and is deliberately NOT wired to pull_request or push: it is red
+# while the robustness work in docs/specs/stress-test-system-plan.md is
+# outstanding, and a permanently failing required check is noise.
+#
+# To enable it more broadly, uncomment either trigger:
+#   schedule:
+#     - cron: '0 3 * * 1'
+#   pull_request:
+# and, while the suite is still red, keep `continue-on-error: true` on the run
+# step below. Remove that line once the scenarios pass and it becomes a hard
+# gate. Neither trigger carries `inputs`, so also give the run step's
+# `STRESS_ITERATIONS` a literal then: an empty value means the runner's own
+# default of 20 rounds, not the 3 the dispatch input starts from.
+on:
+  workflow_dispatch:
+    inputs:
+      iterations:
+        description: Rounds of all scenarios
+        required: false
+        default: '3'
+      chrome_args:
+        description: 'Extra Chrome switches, e.g. --no-sandbox'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  # `cache-to: type=gha` below writes through the Actions cache API, which the
+  # job's token has to be allowed to use. Without it the build still succeeds -
+  # BuildKit only warns (unable to reserve cache) - but every dispatch pays the
+  # full apt-get + npm ci image build, and `cache-from` has nothing to read.
+  actions: write
+
+jobs:
+  stress-test:
+    name: Stress test in container
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The host build compiles the vendored devtools-frontend sources.
+          submodules: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          # Matches the image's `node:24-slim` base by hand rather than reading
+          # `.nvmrc`: the image copies the host-built `build/`, so the two must
+          # not drift apart silently.
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          # The browser lives in the image, not on the runner.
+          PUPPETEER_SKIP_DOWNLOAD: true
+
+      - name: Build the compiled suite the image ships
+        run: npm run build
+        env:
+          # A cold tsc over the DevTools sources exceeds Node's default heap -
+          # the same reason the image copies build/ instead of compiling it.
+          NODE_OPTIONS: '--max_old_space_size=4096'
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Build the stress image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: tests/stress/docker/Dockerfile
+          load: true
+          tags: opera-devtools-stress:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run the stress suite
+        id: stress
+        # Red until the robustness fixes land, so the job reports without
+        # blocking. Delete this line once the scenarios pass and it becomes a
+        # hard gate - no other change is needed.
+        continue-on-error: true
+        env:
+          # The input's `default` is the single source of the count.
+          STRESS_ITERATIONS: ${{ inputs.iterations }}
+          STRESS_CHROME_ARGS: ${{ inputs.chrome_args }}
+        run: |
+          set -o pipefail
+          # Same escape hatch the local path has (`scripts/stress-docker.js`,
+          # compose, docs/stress-testing.md): a runner whose kernel blocks a
+          # sandbox feature the container's Chromium needs is repairable from the
+          # dispatch form, without editing this file. An array keeps a
+          # multi-switch value intact - `"${STRESS_CHROME_ARGS:+-e ...}"` would
+          # word-split it.
+          chrome_env=()
+          if [ -n "$STRESS_CHROME_ARGS" ]; then
+            chrome_env=(-e "STRESS_CHROME_ARGS=$STRESS_CHROME_ARGS")
+          fi
+          if docker run --rm \
+            --init \
+            --tmpfs /tmp \
+            --security-opt seccomp=unconfined \
+            -e STRESS_ITERATIONS="$STRESS_ITERATIONS" \
+            "${chrome_env[@]}" \
+            opera-devtools-stress:ci 2>&1 | tee stress-run.log; then
+            echo "stress exit=0" >>"$GITHUB_STEP_SUMMARY"
+          else
+            status=$?
+            echo "stress exit=$status (documented defects reproduced)" >>"$GITHUB_STEP_SUMMARY"
+            exit "$status"
+          fi
+
+      - name: Upload the stress report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: stress-run-log
+          path: stress-run.log
+          if-no-files-found: ignore

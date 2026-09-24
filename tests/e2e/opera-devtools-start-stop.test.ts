@@ -16,8 +16,25 @@ import {
   assertDaemonIsRunning,
   runCli,
 } from '../utils.js';
+import {CLI_BIN_NAME} from '../../src/opera/branding.js';
 
-describe('opera-devtools', () => {
+/**
+ * The args the daemon hands the MCP server, read back from `status`.
+ *
+ * The line is JSON, so a Windows path arrives there with escaped backslashes:
+ * comparing a path against the raw stdout misses on Windows only. Parsing the
+ * line is what makes the assertions below platform-independent, and it is what
+ * `status` prints the array for.
+ */
+function daemonArgs(stdout: string): string[] {
+  const line = stdout
+    .split('\n')
+    .find(candidate => candidate.startsWith('args='));
+  assert.ok(line, `no args line in the status output:\n${stdout}`);
+  return JSON.parse(line.slice('args='.length)) as string[];
+}
+
+describe(CLI_BIN_NAME, () => {
   let sessionId: string;
 
   beforeEach(async () => {
@@ -104,6 +121,56 @@ describe('opera-devtools', () => {
       );
     } finally {
       fs.rmSync(workspace, {recursive: true, force: true});
+    }
+  });
+
+  it('lets configured OPERA_CLI_* browser options beat the start defaults', async () => {
+    const userDataDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'opera-devtools-config-profile-'),
+    );
+    const configured = {
+      OPERA_CLI_HEADED: '1',
+      OPERA_CLI_USER_DATA_DIR: userDataDir,
+    };
+
+    try {
+      const startResult = await runCli(['start'], sessionId, configured);
+      assert.strictEqual(
+        startResult.status,
+        0,
+        `start command failed: ${startResult.stderr}`,
+      );
+
+      const statusResult = await runCli(['status'], sessionId, configured);
+      assert.strictEqual(statusResult.status, 0);
+      // These are the args the daemon hands the MCP server, which turns the
+      // missing headless flag into `--headless=false` from the same config. A
+      // serialized `--headless`/`--isolated` here is the CLI's own start
+      // default overriding the config before the MCP server can read it.
+      const daemonArgv = daemonArgs(statusResult.stdout);
+      assert.ok(
+        daemonArgv.includes(`--user-data-dir=${userDataDir}`) &&
+          !daemonArgv.includes('--isolated') &&
+          !daemonArgv.includes('--headless'),
+        `configured browser options were not honoured: ${statusResult.stdout}`,
+      );
+
+      // The other direction: an explicit "no window" config still reaches it.
+      await runCli(['stop'], sessionId);
+      const headlessEnv = {OPERA_CLI_HEADED: '0'};
+      const headlessStart = await runCli(['start'], sessionId, headlessEnv);
+      assert.strictEqual(
+        headlessStart.status,
+        0,
+        `start command failed: ${headlessStart.stderr}`,
+      );
+      const headlessStatus = await runCli(['status'], sessionId, headlessEnv);
+      assert.ok(
+        daemonArgs(headlessStatus.stdout).includes('--headless'),
+        `OPERA_CLI_HEADED=0 was not honoured: ${headlessStatus.stdout}`,
+      );
+    } finally {
+      fs.rmSync(userDataDir, {recursive: true, force: true});
     }
   });
 });

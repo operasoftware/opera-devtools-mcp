@@ -6,7 +6,13 @@
 
 import assert from 'node:assert';
 import crypto from 'node:crypto';
-import {existsSync, rmSync} from 'node:fs';
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+} from 'node:fs';
 import {dirname} from 'node:path';
 import {describe, it, afterEach, beforeEach} from 'node:test';
 
@@ -16,7 +22,13 @@ import {
   stopDaemon,
   verifyDaemonVersion,
 } from '../../src/daemon/client.js';
-import {isDaemonRunning} from '../../src/daemon/utils.js';
+import {getRuntimeHome, isDaemonRunning} from '../../src/daemon/utils.js';
+import {writeExitReason} from '../../src/opera/daemonLifecycle.js';
+import {
+  daemonExitMessage,
+  getDaemonLogPath,
+  getPreviousDaemonLogPath,
+} from '../../src/opera/daemonLog.js';
 import {VERSION} from '../../src/version.js';
 
 describe('daemon client', () => {
@@ -102,6 +114,51 @@ describe('daemon client', () => {
         warning,
         undefined,
         'Should not return warning when daemon is stopped',
+      );
+    });
+  });
+
+  describe('daemon exit reporting', () => {
+    it('reports the reason a daemon recorded on its way out', () => {
+      mkdirSync(getRuntimeHome(sessionId), {recursive: true, mode: 0o700});
+      writeExitReason(sessionId, 'unhandled rejection: boom');
+
+      assert.strictEqual(
+        daemonExitMessage(sessionId),
+        'Daemon exited while running the command: unhandled rejection: boom',
+      );
+    });
+
+    it('points at the daemon output when a killed daemon left no reason', () => {
+      const message = daemonExitMessage(sessionId);
+
+      assert.ok(
+        message.includes(getDaemonLogPath(sessionId)),
+        `a daemon that left no reason must still name its output, got: ${message}`,
+      );
+    });
+  });
+
+  describe('daemon log', () => {
+    it('keeps the previous daemon output when a new daemon starts', async () => {
+      await startDaemon([], sessionId);
+      await stopDaemon(sessionId);
+
+      const logPath = getDaemonLogPath(sessionId);
+      appendFileSync(logPath, 'MARKER previous daemon output\n');
+      await startDaemon([], sessionId);
+
+      // Rotated, not truncated: the log is where a killed daemon's output is
+      // diagnosed from, and a restart must not be the thing that erases it.
+      assert.ok(
+        readFileSync(getPreviousDaemonLogPath(sessionId), 'utf-8').includes(
+          'MARKER previous daemon output',
+        ),
+        'the previous daemon output must survive the next start',
+      );
+      assert.ok(
+        !readFileSync(logPath, 'utf-8').includes('MARKER'),
+        'the new daemon must start a fresh log',
       );
     });
   });
