@@ -32,6 +32,7 @@
  * system before being acted on.
  */
 
+import childProcess from 'node:child_process';
 import {existsSync, lstatSync, readFileSync, readlinkSync} from 'node:fs';
 import {request} from 'node:http';
 import {hostname} from 'node:os';
@@ -119,29 +120,65 @@ export function parseSingletonTarget(
 }
 
 /**
- * Whether a parsed lock identity can belong to a process on this machine.
+ * The names this machine's Chromium may have written into a `SingletonLock`.
  *
- * The POSIX singleton writes "<hostname>-<pid>"; Chromium's macOS singleton
- * writes "Mac-<pid>", where "Mac" is that implementation's fixed local marker
- * rather than a hostname. It is only treated as local on darwin, so a machine
- * that is genuinely named "Mac" elsewhere keeps its lock unattributable.
+ * `os.hostname()` is `gethostname()`, and on macOS that is the short,
+ * ComputerName-derived name — "Mac", on a laptop that has been renamed — while
+ * Chromium's POSIX singleton asks `[[NSHost currentHost] name]`, the Bonjour
+ * name built from the LocalHostName ("opera-users-MacBook-Pro-2.local"). The
+ * two disagree on any renamed Mac, and a lock that names the other spelling is
+ * still this machine's. Treating it as foreign discards the pid, and the pid is
+ * the only thing that can restart the browser holding the profile: the user is
+ * told to quit Opera themselves for a browser we could have identified.
+ *
+ * `scutil` is asked per call rather than cached, so a test can stub the process
+ * seam and see its own answer; it costs a few milliseconds on a path that runs
+ * once per command, and a failure (no `scutil`, or a sandbox that blocks it)
+ * simply leaves the name out — the old behaviour.
  */
-function isLocalLockIdentity(
-  hostnamePart: string,
-  platform: NodeJS.Platform,
-): boolean {
-  if (hostnamePart === hostname()) {
-    return true;
+export function localHostNames(
+  platform: NodeJS.Platform = process.platform,
+): string[] {
+  const names = [hostname()];
+  if (platform === 'darwin') {
+    const local = readMacLocalHostName();
+    if (local !== null) {
+      names.push(local, `${local}.local`);
+    }
+    // Chromium's macOS singleton has also been seen writing this marker in
+    // place of a hostname; it means this machine either way.
+    names.push('Mac');
   }
-  return platform === 'darwin' && hostnamePart === 'Mac';
+  return [...new Set(names)];
 }
 
-function isProcessAlive(pid: number): boolean {
+function readMacLocalHostName(): string | null {
+  try {
+    const name = childProcess
+      .execFileSync('scutil', ['--get', 'LocalHostName'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      })
+      .trim();
+    return name && name !== 'not set' ? name : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether a pid belongs to a running process on this machine.
+ *
+ * `EPERM` means it exists but belongs to another user, which still counts as
+ * alive; anything else means it is gone. Exported because the pid is polled
+ * while waiting for a signalled browser to exit (`browserTarget.ts`), and that
+ * poll has to agree with this one about the EPERM case.
+ */
+export function isProcessAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
     return true;
   } catch (error) {
-    // EPERM means it exists but belongs to another user — still alive.
     return (error as NodeJS.ErrnoException).code === 'EPERM';
   }
 }
@@ -157,6 +194,7 @@ export function inspectProfileLock(
   userDataDir: string,
   aliveCheck: (pid: number) => boolean = isProcessAlive,
   platform: NodeJS.Platform = process.platform,
+  localNames: readonly string[] = localHostNames(platform),
 ): ProfileLock {
   const lockPath = join(userDataDir, 'SingletonLock');
 
@@ -179,8 +217,9 @@ export function inspectProfileLock(
     return {state: 'unknown', pid: null, hostname: null};
   }
 
-  // Foreign (another machine) or genuinely unattributable: never signal its pid.
-  if (!isLocalLockIdentity(parsed.hostname, platform)) {
+  // Another machine (a synced profile) or a local name we do not know: never
+  // signal its pid.
+  if (!localNames.includes(parsed.hostname)) {
     return {state: 'unknown', pid: null, hostname: parsed.hostname};
   }
   if (!aliveCheck(parsed.pid)) {
@@ -268,4 +307,32 @@ export function probeDevToolsEndpoint(
   });
   req.end();
   return promise;
+}
+
+export interface AttachableEndpoint {
+  /** e.g. `http://127.0.0.1:9222` */
+  url: string;
+  identity: DevToolsIdentity;
+}
+
+/**
+ * The browser URL to attach to for this profile, or null when there is nothing
+ * live to attach to.
+ *
+ * This is the one signal that makes driving the user's own browser automatic:
+ * a browser started with `--remote-debugging-port` records its port in the
+ * profile, so every later command finds it without any configuration.
+ */
+export async function findAttachableEndpoint(
+  userDataDir: string,
+): Promise<AttachableEndpoint | null> {
+  const port = readDevToolsPort(userDataDir);
+  if (port === null) {
+    return null;
+  }
+  const identity = await probeDevToolsEndpoint(port);
+  if (identity === null) {
+    return null;
+  }
+  return {url: `http://127.0.0.1:${port}`, identity};
 }

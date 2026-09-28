@@ -75,6 +75,28 @@ opera-browser-cli url $u1     # answered from the last snapshot's token map — 
 opera-browser-cli url @2.4    # a ref is page state, so this takes a fresh snapshot
 ```
 
+## The configured profile is already open
+
+If Opera is already running on the profile `setup` selected — normally, without
+a debugging port — the CLI cannot launch a second browser on it. It asks before
+each command that has to pick a browser:
+
+- On a terminal: `[1]` restarts Opera with a debugging port (tabs are restored),
+  `[2]` runs this command on a separate profile where the user is not signed in.
+- With no terminal (which is how agents run it): `[2]`, no prompt. A note on
+  stderr names the profile it used instead.
+
+`--takeover` restarts Opera without asking, for scripted callers. It closes and
+reopens a browser the user may be using — pass it only with the user's
+agreement, never as a retry. A daemon that is already running keeps the browser
+it started with, so the question only comes up when one is being started, or on
+`start`.
+
+The same settling happens when a command fails with `A browser is already
+running with the profile …`: the command is retried once on the browser that was
+chosen, so that error is not something to work around. If it comes back again,
+the conflict could not be settled — report it rather than retrying.
+
 ## Long-running Opera AI commands stream
 
 `opera_chat`, `opera_do`, `opera_make`, `opera_research`,

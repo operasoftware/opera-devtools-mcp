@@ -6,6 +6,7 @@
  */
 
 import assert from 'node:assert';
+import childProcess from 'node:child_process';
 import fs from 'node:fs';
 import {createServer, type Server} from 'node:http';
 import {type AddressInfo} from 'node:net';
@@ -13,9 +14,13 @@ import os from 'node:os';
 import path from 'node:path';
 import {afterEach, describe, it} from 'node:test';
 
+import sinon from 'sinon';
+
 import {
   defaultProfileDir,
+  findAttachableEndpoint,
   inspectProfileLock,
+  localHostNames,
   parseDevToolsActivePort,
   parseSingletonTarget,
   probeDevToolsEndpoint,
@@ -154,6 +159,51 @@ describe('parseSingletonTarget', () => {
   });
 });
 
+describe('localHostNames', () => {
+  it('is just the machine’s own name where Chromium asks gethostname()', () => {
+    assert.deepStrictEqual(localHostNames('linux'), [os.hostname()]);
+    assert.deepStrictEqual(localHostNames('win32'), [os.hostname()]);
+  });
+
+  it('adds the macOS names Chromium writes instead of gethostname()', () => {
+    const scutil = sinon
+      .stub(childProcess, 'execFileSync')
+      .returns('opera-users-MacBook-Pro-2\n');
+
+    try {
+      const names = localHostNames('darwin');
+      assert.ok(names.includes('opera-users-MacBook-Pro-2'), names.join(','));
+      assert.ok(
+        names.includes('opera-users-MacBook-Pro-2.local'),
+        names.join(','),
+      );
+      assert.ok(names.includes('Mac'), names.join(','));
+      assert.deepStrictEqual(scutil.firstCall.args.slice(0, 2), [
+        'scutil',
+        ['--get', 'LocalHostName'],
+      ]);
+    } finally {
+      sinon.restore();
+    }
+  });
+
+  it('leaves the name out when scutil cannot answer', () => {
+    const scutil = sinon
+      .stub(childProcess, 'execFileSync')
+      .throws(new Error('Operation not permitted'));
+
+    try {
+      assert.deepStrictEqual(localHostNames('darwin'), [
+        os.hostname(),
+        ...(os.hostname() === 'Mac' ? [] : ['Mac']),
+      ]);
+      assert.strictEqual(scutil.called, true);
+    } finally {
+      sinon.restore();
+    }
+  });
+});
+
 describe('inspectProfileLock', () => {
   it('reports free when there is no lock file', () => {
     const dir = tempDir();
@@ -228,6 +278,50 @@ describe('inspectProfileLock', () => {
           state: 'locked',
           pid: 4242,
           hostname: 'Mac',
+        },
+      );
+    },
+  );
+
+  it(
+    'keeps the pid of a lock that names the macOS LocalHostName',
+    {skip: process.platform === 'win32'},
+    () => {
+      // What a renamed Mac actually gets: Chromium writes the Bonjour name
+      // ("<LocalHostName>.local"), while `os.hostname()` reports the short
+      // ComputerName-derived one, so the two never match.
+      const dir = tempDir();
+      fs.symlinkSync(
+        'opera-users-MacBook-Pro-2.local-4242',
+        path.join(dir, 'SingletonLock'),
+      );
+      assert.deepStrictEqual(
+        inspectProfileLock(dir, () => true, 'darwin', [
+          'Mac',
+          'opera-users-MacBook-Pro-2',
+          'opera-users-MacBook-Pro-2.local',
+        ]),
+        {
+          state: 'locked',
+          pid: 4242,
+          hostname: 'opera-users-MacBook-Pro-2.local',
+        },
+      );
+    },
+  );
+
+  it(
+    'keeps a foreign hostname unattributable',
+    {skip: process.platform === 'win32'},
+    () => {
+      const dir = tempDir();
+      fs.symlinkSync('someone-elses-mac-4242', path.join(dir, 'SingletonLock'));
+      assert.deepStrictEqual(
+        inspectProfileLock(dir, () => true, 'darwin', ['Mac']),
+        {
+          state: 'unknown',
+          pid: null,
+          hostname: 'someone-elses-mac',
         },
       );
     },
@@ -326,6 +420,35 @@ describe('probeDevToolsEndpoint', () => {
   it('returns null for malformed JSON', async () => {
     const port = await serveRaw('{nope', 200);
     assert.strictEqual(await probeDevToolsEndpoint(port, 500), null);
+  });
+});
+
+describe('findAttachableEndpoint', () => {
+  it('answers with the URL of a live browser on the advertised port', async () => {
+    const dir = tempDir();
+    const port = await serveRaw('{"Browser":"Opera/121.0.0.0"}', 200);
+    fs.writeFileSync(
+      path.join(dir, 'DevToolsActivePort'),
+      `${port}\n/devtools/browser/x\n`,
+    );
+    assert.deepStrictEqual(await findAttachableEndpoint(dir), {
+      url: `http://127.0.0.1:${port}`,
+      identity: {browser: 'Opera/121.0.0.0', isOpera: true},
+    });
+  });
+
+  it('is null when the recorded port answers nothing', async () => {
+    const dir = tempDir();
+    const port = await closedPort();
+    fs.writeFileSync(
+      path.join(dir, 'DevToolsActivePort'),
+      `${port}\n/devtools/browser/x\n`,
+    );
+    assert.strictEqual(await findAttachableEndpoint(dir), null);
+  });
+
+  it('is null when the profile recorded no port at all', async () => {
+    assert.strictEqual(await findAttachableEndpoint(tempDir()), null);
   });
 });
 

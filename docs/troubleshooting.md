@@ -171,23 +171,68 @@ something to redirect.
 ### `A browser is already running with the profile … so a second one cannot be launched on it`
 
 The profile is held by a browser that is already running, so a second browser
-cannot be launched on it. You have two options, and they are not the same thing:
+cannot be launched on it. The CLI settles this before it starts the daemon: on
+a terminal it asks, and the two answers are not the same thing:
 
-- **Drive the browser that is already running.** It has to have been started with
-  a debugging port:
+```
+Opera is already running on the profile opera-browser-cli is configured to use:
+  /Users/you/Library/Application Support/com.operasoftware.OperaNeonDeveloper
 
-  ```sh
-  "/Applications/Opera Neon Developer.app/Contents/MacOS/Opera" \
-    --user-data-dir=/tmp/neon-clear-demo --remote-debugging-port=9222
-  opera-browser-cli start --browser-url=http://127.0.0.1:9222
-  ```
+  [1] Restart Opera now so the CLI can drive it (tabs are restored)
+  [2] Use a separate profile instead (you will need to sign in there)
 
-  `--autoConnect` (Chrome 144+) is the variant that reads `DevToolsActivePort`
-  from the profile instead of taking a URL. Browser options belong to `start`;
-  a tool command such as `list_pages` does not accept them.
+Select [1/2] (default 2):
+```
 
-- **Use a separate profile** with `--isolated`, which launches its own browser
-  and leaves the running one alone.
+- **1 — restart it.** Opera is asked to quit (`SIGTERM`, so the session is
+  saved) and started again with `--remote-debugging-port=0`, which has Chromium
+  pick a free port and record it in the profile. Every later command attaches to
+  it on its own; the browser stays yours and stays open. Scripted callers skip
+  the question with `--takeover` — it restarts the browser without asking, so an
+  agent should only pass it once the user has agreed.
+
+  The process to signal is the one the profile's own `SingletonLock` names, and
+  the answer is read the same way Chromium writes it — including the macOS
+  Bonjour name, which is not what `hostname` prints on a Mac that has been
+  renamed. If the lock names no process on this machine at all (a profile synced
+  from another computer), there is nobody to signal and `1` says so; `2` still
+  works.
+
+- **2 — use a separate profile.** Nothing touches the running browser; the
+  command runs on `~/.opera-browser-cli/profile` instead, where the user is not
+  signed in. This is also what happens with no terminal to ask in: the fallback
+  always works, so no prompt can hang an agent.
+
+An answer is only asked for when a browser actually has to be chosen — a daemon
+that is already running fixed its browser when it started, so later commands
+reuse it rather than asking again. `start` re-checks, because that is the
+command that picks the browser options; the lock it can see then belongs to the
+browser it is about to release, so that one is not a conflict either.
+
+A daemon whose browser is not there is settled the same way, at the failure
+instead of before it: a tool call that comes back with `A browser is already
+running with the profile …` — a daemon started before that browser was opened,
+or an older daemon pinned to the profile it was given — or with `Could not
+attach to the browser at …` — a daemon pinned to a debug port whose browser has
+since closed — asks the question (or falls back, with no terminal to ask in),
+starts a fresh daemon on the browser that was chosen, and retries the command
+once. Nothing the tool did needs undoing: the browser never came up, so the tool
+never ran. A `--browser-url`, `--wsEndpoint` or `--autoConnect` that _you_
+configured is left alone — that browser is yours to start again, which is what
+the failure says.
+
+To drive the browser that is running without restarting it, it has to have been
+started with a debugging port:
+
+```sh
+"/Applications/Opera Neon Developer.app/Contents/MacOS/Opera" \
+  --user-data-dir=/tmp/neon-clear-demo --remote-debugging-port=9222
+opera-browser-cli start --browser-url=http://127.0.0.1:9222
+```
+
+`--autoConnect` (Chrome 144+) is the variant that reads `DevToolsActivePort`
+from the profile instead of taking a URL. Browser options belong to `start`;
+a tool command such as `list_pages` does not accept them.
 
 `--isolated` alone is _not_ a way to attach: it starts a third browser on a
 throwaway profile.

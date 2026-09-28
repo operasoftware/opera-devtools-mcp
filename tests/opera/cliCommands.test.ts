@@ -436,4 +436,155 @@ describe('the fork commands through yargs', () => {
       }
     });
   });
+
+  describe('a profile that was already open', () => {
+    /** What a launch reports when another browser holds the profile. */
+    const PROFILE_IN_USE =
+      'A browser is already running with the profile /configured/profile, so a second one cannot be launched on it.\n' +
+      'Cause: The browser is already running for /configured/profile.';
+
+    /** A daemon that fails the first call and answers the second. */
+    function conflictDaemon(first: string, second: string) {
+      const received: Frame[] = [];
+      let calls = 0;
+      fakeDaemon(() => {
+        calls++;
+        if (calls === 1) {
+          return JSON.stringify({
+            success: true,
+            result: JSON.stringify({
+              isError: true,
+              content: [{type: 'text', text: first}],
+            }),
+            error: null,
+          });
+        }
+        return JSON.stringify({
+          success: true,
+          result: JSON.stringify({content: [{type: 'text', text: second}]}),
+          error: null,
+        });
+      }, received);
+      return received;
+    }
+
+    it('settles the conflict and retries the call once', async () => {
+      const saved = process.exitCode;
+      try {
+        const received = conflictDaemon(PROFILE_IN_USE, 'clicked');
+        const settled: string[] = [];
+        const deps = {
+          start: sinon.stub().callsFake(
+            recordingStart(() => {
+              // Both the first start and the retry's.
+            }),
+          ),
+          settleConflict: async (id: string) => {
+            settled.push(id);
+            // What the real one does: the daemon is pinned to the browser it
+            // was started with, so settling takes it down for the retry.
+            rmSync(getPidFilePath(id), {force: true});
+            return true;
+          },
+        };
+        const y = makeYargs(sessionId);
+        registerToolCommand(y, 'click', commands['click']!, deps);
+        const log = sinon.stub(console, 'log');
+        const error = sinon.stub(console, 'error');
+
+        await y.parse(['click', '1_2']);
+
+        assert.deepStrictEqual(settled, [sessionId], 'settled the conflict');
+        assert.strictEqual(
+          deps.start.callCount,
+          2,
+          'a fresh daemon for the retry',
+        );
+        assert.strictEqual(
+          received.filter(f => f.method === 'invoke_tool').length,
+          2,
+          'the call was tried twice, no more',
+        );
+        assert.strictEqual(error.called, false, 'the failure was not reported');
+        assert.deepStrictEqual(log.firstCall.args, ['clicked']);
+      } finally {
+        process.exitCode = saved;
+      }
+    });
+
+    it('does not settle a failure the browser cannot explain', async () => {
+      const saved = process.exitCode;
+      try {
+        conflictDaemon('Element uid "999_999" not found on page 1.', 'clicked');
+        const settle = sinon.stub().resolves(true);
+        const deps = {
+          start: sinon.stub().callsFake(
+            recordingStart(() => {
+              // The daemon comes up for the first attempt.
+            }),
+          ),
+          settleConflict: settle,
+        };
+        const y = makeYargs(sessionId);
+        registerToolCommand(y, 'click', commands['click']!, deps);
+        sinon.stub(console, 'log');
+        const error = sinon.stub(console, 'error');
+
+        await y.parse(['click', '999_999']);
+
+        assert.strictEqual(settle.called, false, 'no conflict to settle');
+        assert.match(error.firstCall.args[0] as string, /REF_NOT_FOUND/);
+      } finally {
+        process.exitCode = saved;
+      }
+    });
+
+    it('recovers from an attach target whose browser is gone', async () => {
+      // The daemon was pinned to a port the CLI discovered for it; that browser
+      // has since closed, and an attached browser is never restarted, so the
+      // daemon would fail this way forever.
+      const saved = process.exitCode;
+      try {
+        const ATTACH_FAILED =
+          'Could not attach to the browser at http://127.0.0.1:53943. ' +
+          'Check that it is running with remote debugging enabled. ' +
+          'An attached browser is not managed by this daemon, so it is not restarted for you — start it again and re-attach.';
+        const received = conflictDaemon(ATTACH_FAILED, 'clicked');
+        const settled: string[] = [];
+        const deps = {
+          start: sinon.stub().callsFake(
+            recordingStart(() => {
+              // The retry's own daemon.
+            }),
+          ),
+          settleConflict: async (id: string) => {
+            settled.push(id);
+            rmSync(getPidFilePath(id), {force: true});
+            return true;
+          },
+        };
+        const y = makeYargs(sessionId);
+        registerToolCommand(y, 'click', commands['click']!, deps);
+        const log = sinon.stub(console, 'log');
+        const error = sinon.stub(console, 'error');
+
+        await y.parse(['click', '1_2']);
+
+        assert.deepStrictEqual(settled, [sessionId]);
+        assert.strictEqual(
+          deps.start.callCount,
+          2,
+          'a fresh daemon for the retry',
+        );
+        assert.strictEqual(
+          received.filter(f => f.method === 'invoke_tool').length,
+          2,
+        );
+        assert.strictEqual(error.called, false, 'the failure was not reported');
+        assert.deepStrictEqual(log.firstCall.args, ['clicked']);
+      } finally {
+        process.exitCode = saved;
+      }
+    });
+  });
 });

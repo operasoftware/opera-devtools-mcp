@@ -159,6 +159,36 @@ export function describeBrowserMode(args: readonly string[]): string {
 }
 
 /**
+ * The profile a stored argv's launched browser was pointed at, if any.
+ *
+ * Read back for the same reason `describeBrowserMode` is: a daemon fixes its
+ * browser at startup, so its argv is the only record of which profile that
+ * browser holds. The CLI uses it to tell its own browser — which never
+ * advertises a debug port, because it is launched over a pipe — from the one a
+ * user opened, which is the difference between "nothing to do" and "ask".
+ */
+export function launchedUserDataDir(
+  args: readonly string[],
+): string | undefined {
+  const value = readFlags(args).get('userDataDir');
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+/**
+ * The `--browser-url` a stored argv carries, if it carries one.
+ *
+ * That is the form the CLI's own endpoint discovery sets (`browserTarget.ts`
+ * finds a live `DevToolsActivePort` and passes the URL on), which makes it the
+ * one attach target the CLI may re-derive when the browser behind it is gone: a
+ * `--wsEndpoint` or `--autoConnect` was typed by the user, and their browser is
+ * theirs to start again.
+ */
+export function storedBrowserUrl(args: readonly string[]): string | undefined {
+  const value = readFlags(args).get('browserUrl');
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+/**
  * How long a relaunch waits for the browser to fall idle before it gives up and
  * reports why, and how often it looks. A mutable object so tests can drive the
  * wait without waiting: faking timers is not workable here (sinon's fake clock

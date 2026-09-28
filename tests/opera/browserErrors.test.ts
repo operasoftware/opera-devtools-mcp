@@ -10,6 +10,8 @@ import {describe, it} from 'node:test';
 
 import {
   attachFailed,
+  classifyBrowserFailure,
+  isProfileInUseMessage,
   noDevToolsEndpoint,
   profileInUse,
 } from '../../src/opera/browserErrors.js';
@@ -25,6 +27,52 @@ describe('profileInUse', () => {
     assert.ok(message.includes('--browser-url'), message);
     assert.ok(message.includes('--autoConnect'), message);
     assert.ok(message.includes('--isolated'), message);
+  });
+});
+
+describe('isProfileInUseMessage', () => {
+  it('recognises the launch failure, wrapped the way tools deliver it', () => {
+    // `ToolHandler` appends the cause, so the match has to survive that.
+    assert.strictEqual(
+      isProfileInUseMessage(
+        `${profileInUse(DIR)}\nCause: The browser is already running for ${DIR}.`,
+      ),
+      true,
+    );
+  });
+
+  it('does not claim another failure', () => {
+    assert.strictEqual(isProfileInUseMessage('Element uid not found'), false);
+    assert.strictEqual(isProfileInUseMessage(noDevToolsEndpoint(DIR)), false);
+    assert.strictEqual(isProfileInUseMessage(attachFailed({}, false)), false);
+  });
+});
+
+describe('classifyBrowserFailure', () => {
+  it('names the two failures the daemon cannot get out of by itself', () => {
+    // `ToolHandler` appends the cause, so the match has to survive that.
+    assert.strictEqual(
+      classifyBrowserFailure(
+        `${profileInUse(DIR)}\nCause: The browser is already running for ${DIR}.`,
+      ),
+      'profile-in-use',
+    );
+    assert.strictEqual(
+      classifyBrowserFailure(attachFailed({browserURL: 'http://b'}, false)),
+      'unreachable',
+    );
+    assert.strictEqual(
+      classifyBrowserFailure(noDevToolsEndpoint(DIR)),
+      'unreachable',
+    );
+  });
+
+  it('claims no other failure', () => {
+    assert.strictEqual(
+      classifyBrowserFailure('Element uid not found'),
+      undefined,
+    );
+    assert.strictEqual(classifyBrowserFailure(''), undefined);
   });
 });
 

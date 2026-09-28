@@ -35,11 +35,14 @@ import {
   sendCommand,
   verifyDaemonVersion,
 } from '../daemon/client.js';
+import type {DaemonResponse} from '../daemon/types.js';
 import {isDaemonRunning, serializeArgs} from '../daemon/utils.js';
 import type {CallToolResult} from '../third_party/index.js';
 import {VERSION} from '../version.js';
 
 import {CLI_BIN_NAME, MCP_BIN_NAME} from './branding.js';
+import {classifyBrowserFailure, type BrowserFailure} from './browserErrors.js';
+import {settleBrowserConflict} from './browserTarget.js';
 import {
   CdpError,
   EXIT_CODES,
@@ -64,6 +67,49 @@ import {handleUrl} from './urlResolver.js';
 export interface CliCommandDeps {
   /** Upstream's `start`: brings the daemon up with the given tool argv. */
   start(args: string[], sessionId: string): Promise<void>;
+  /**
+   * Settle a browser conflict the daemon could not, reporting whether the
+   * browser was re-selected. Defaults to `settleBrowserConflict`; injected by
+   * tests, which have neither a terminal nor a browser to conflict over.
+   */
+  settleConflict?(sessionId: string): Promise<boolean>;
+}
+
+/**
+ * The failure text a daemon reply carries, or undefined when the call was fine.
+ *
+ * A tool error arrives as `isError` on a successful reply, and is read here the
+ * same way the renderer reads it: one text, checked for the one condition the
+ * CLI can do something about.
+ */
+async function toolFailureText(
+  response: DaemonResponse,
+): Promise<string | undefined> {
+  if (!response.success) {
+    return String(response.error);
+  }
+  const result = JSON.parse(response.result) as unknown as CallToolResult;
+  if (result.isError !== true) {
+    return undefined;
+  }
+  return await handleResponse(result, 'md');
+}
+
+/**
+ * Settle the failure a browser reported: the profile is known to be in use (so
+ * the lock file is not asked) or the browser the daemon drives is gone, and
+ * `--takeover` — read here rather than passed down because the command parser
+ * never saw it (`bin/opera-browser-cli.ts` consumes it) — decides whether a
+ * browser may be restarted.
+ */
+function settleKnownConflict(
+  reason: BrowserFailure,
+): (sessionId: string) => Promise<boolean> {
+  return sessionId =>
+    settleBrowserConflict(sessionId, {
+      takeover: process.env.OPERA_CLI_TAKEOVER === '1',
+      reason,
+    });
 }
 
 /**
@@ -321,18 +367,41 @@ export function registerToolCommand(
         // (src/opera/refArgs.ts).
         const commandArgs = normalizeRefArgs(args, rawArgs);
 
-        const response = await sendCommand(
-          {
-            method: 'invoke_tool',
-            tool: commandName,
-            args: commandArgs,
-          },
-          sessionId,
-          operaAiTimeoutMs(commandName),
-          streaming
-            ? (chunk: string) => process.stderr.write(chunk + '\n')
-            : undefined,
-        );
+        const invoke = () =>
+          sendCommand(
+            {
+              method: 'invoke_tool',
+              tool: commandName,
+              args: commandArgs,
+            },
+            sessionId,
+            operaAiTimeoutMs(commandName),
+            streaming
+              ? (chunk: string) => process.stderr.write(chunk + '\n')
+              : undefined,
+          );
+
+        let response = await invoke();
+        let failureText = await toolFailureText(response);
+        // A browser failure the CLI can settle never reached the tool — the
+        // daemon could not get a browser to run it on — so the only thing to do
+        // is settle it and try once more. This is the case a preflight cannot
+        // see: a daemon pinned to a profile that a browser now holds, or to an
+        // attach URL whose browser is gone, and only the failure says so.
+        const browserFailure =
+          failureText === undefined
+            ? undefined
+            : classifyBrowserFailure(failureText);
+        if (browserFailure !== undefined) {
+          await (deps.settleConflict ?? settleKnownConflict(browserFailure))(
+            sessionId,
+          );
+          if (!isDaemonRunning(sessionId)) {
+            await deps.start(serializeArgs(mcpOptions, argv), sessionId);
+          }
+          response = await invoke();
+          failureText = await toolFailureText(response);
+        }
 
         if (response.success) {
           const result = JSON.parse(
@@ -348,7 +417,7 @@ export function registerToolCommand(
             // form of the failure.
             const failure = describeToolFailure(
               commandName,
-              await handleResponse(result, 'md'),
+              failureText ?? (await handleResponse(result, 'md')),
             );
             console.error(
               await renderError(
@@ -383,7 +452,7 @@ export function registerToolCommand(
         } else {
           const failure = describeToolFailure(
             commandName,
-            String(response.error),
+            failureText ?? String(response.error),
           );
           console.error(
             await renderError(

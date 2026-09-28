@@ -8,10 +8,23 @@
 
 // Opera-named bin entry (see `package.json` `bin`). The implementation lives in
 // the upstream-owned file and is branded via `src/opera/branding.ts`.
+//
+// The guard comes FIRST, and has to stay first: it installs on import, and the
+// imports below it reach `third_party`, whose bundled `debug` reads the
+// `localStorage` global and prints Node's Web Storage warning. An import listed
+// before this one that reaches `third_party` puts the warning back in front of
+// every command's output.
+import {preloadWebStorageWarningGuardInChildren} from '../opera/webStorageWarning.js';
+
 import {CLI_BIN_NAME} from '../opera/branding.js';
+import {
+  extractTakeoverFlag,
+  preflightBrowser,
+  sessionIdFromArgv,
+} from '../opera/browserTarget.js';
+import {formatError} from '../opera/cliOutput.js';
 import {autoConfigure, shouldAutoConfigure} from '../opera/config.js';
 import {applyEnvToArgv, loadOperaCliConfig} from '../opera/envConfig.js';
-import {preloadWebStorageWarningGuardInChildren} from '../opera/webStorageWarning.js';
 
 /**
  * Configure a fresh machine in place, without asking. Skips pure queries and
@@ -53,6 +66,34 @@ preloadWebStorageWarningGuardInChildren();
 // On a machine that has never been configured, detect the installed Opera
 // build and write a config + set OPERA_CLI_* so this first command works.
 ensureConfigured(process.argv);
+
+// `--takeover` decides how a profile conflict is settled, and belongs to the
+// preflight rather than to any command — every command parser is strict, so it
+// is read and removed before one of them sees it. It is left in the environment
+// because the preflight is not the only place a conflict is settled: a tool
+// call that fails on one settles it too, one process deeper than any argument
+// the command parser kept (`cliCommands.ts`).
+const takeover = extractTakeoverFlag(process.argv);
+if (takeover) {
+  process.env.OPERA_CLI_TAKEOVER = '1';
+}
+
+// Which browser to drive is decided here, before the command starts a daemon:
+// settling a conflict may need to ask the user, and the daemon is detached with
+// no terminal. The decision travels as OPERA_CLI_* environment, which the
+// daemon and the MCP server it spawns both inherit — and, for `start`, as the
+// flags translated from it immediately below.
+try {
+  await preflightBrowser(
+    process.argv.slice(2),
+    sessionIdFromArgv(process.argv),
+    takeover,
+  );
+} catch (error) {
+  const {output, exitCode} = await formatError(error);
+  console.error(output);
+  process.exit(exitCode);
+}
 
 // `start` is the command that decides the daemon's browser options, and its own
 // defaults (`--headless` from the viaCli options, `--isolated`) are serialized

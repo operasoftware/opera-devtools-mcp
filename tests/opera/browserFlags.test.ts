@@ -23,7 +23,9 @@ import {
   describeBrowserMode,
   ensureBrowserFlagsForTool,
   isLaunchMode,
+  launchedUserDataDir,
   resetOperaFlagState,
+  storedBrowserUrl,
   toolRequiresOperaFlags,
 } from '../../src/opera/browserFlags.js';
 
@@ -111,6 +113,51 @@ describe('describeBrowserMode', () => {
         `argv: ${extra.join(' ')}`,
       );
     }
+  });
+});
+
+describe('launchedUserDataDir', () => {
+  it('reads the profile out of either spelling', () => {
+    assert.strictEqual(
+      launchedUserDataDir(['--userDataDir=/tmp/profile']),
+      '/tmp/profile',
+    );
+    assert.strictEqual(
+      launchedUserDataDir(['--user-data-dir', '/tmp/profile']),
+      '/tmp/profile',
+    );
+  });
+
+  it('is undefined for a daemon that launched nothing on a profile', () => {
+    assert.strictEqual(launchedUserDataDir(['--isolated']), undefined);
+    assert.strictEqual(
+      launchedUserDataDir(['--browserUrl=http://127.0.0.1:9222']),
+      undefined,
+    );
+    assert.strictEqual(launchedUserDataDir([]), undefined);
+    assert.strictEqual(launchedUserDataDir(['--userDataDir=']), undefined);
+  });
+});
+
+describe('storedBrowserUrl', () => {
+  it('reads the attach URL out of either spelling', () => {
+    assert.strictEqual(
+      storedBrowserUrl(['--browserUrl=http://127.0.0.1:9222']),
+      'http://127.0.0.1:9222',
+    );
+    assert.strictEqual(
+      storedBrowserUrl(['--browser-url', 'http://127.0.0.1:9222']),
+      'http://127.0.0.1:9222',
+    );
+  });
+
+  it('is undefined for the attach forms the CLI did not choose', () => {
+    // `--wsEndpoint` and `--autoConnect` are typed by the user: the CLI never
+    // sets them, so it must not retire a daemon that carries one.
+    assert.strictEqual(storedBrowserUrl(['--wsEndpoint=ws://x/y']), undefined);
+    assert.strictEqual(storedBrowserUrl(['--autoConnect']), undefined);
+    assert.strictEqual(storedBrowserUrl(['--userDataDir=/p']), undefined);
+    assert.strictEqual(storedBrowserUrl([]), undefined);
   });
 });
 
