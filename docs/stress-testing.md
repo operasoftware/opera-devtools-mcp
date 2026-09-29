@@ -140,48 +140,49 @@ STRESS_ALLOW_PROCESS_KILLS=true STRESS_ITERATIONS=1 node --import ./build/tests/
 
 A ready-to-use workflow ships at
 [`.github/workflows/stress-test.yml`](../.github/workflows/stress-test.yml). It
-is `workflow_dispatch`-only on purpose: the suite is red while the robustness
-work is outstanding, so it never fires on a PR by accident.
+runs on every `pull_request` and on demand via `workflow_dispatch`. Because it is
+wired to PRs, it runs from the workflow file on the PR's own branch: editing the
+workflow takes effect on the next push to that branch, without waiting for a
+merge to `main`.
 
-Three things in the configuration keep it optional, and each one holds on its own:
+Two things in the configuration keep a red run from blocking, and each one holds
+on its own:
 
-1. **No automatic trigger.** The workflow's only event is `workflow_dispatch` —
-   no `push`, `pull_request`, `merge_group` or `schedule` — so it cannot run
-   because of a commit, a PR or the clock. The `schedule:`/`pull_request:` blocks
-   are present but commented out, next to the note that says what to do about
-   `continue-on-error` when you uncomment them.
-2. **The run step is `continue-on-error: true`**, so even a manual run that
-   reproduces every documented defect reports a green job; the outcome lands in
-   the step summary and the uploaded `stress-run.log`. Delete that line when the
-   scenarios pass to turn it into a hard gate.
-3. **The interlock is pinned off in the required workflows.** `npm test` and
+1. **The run step is `continue-on-error: true`**, so a run that reproduces every
+   documented defect still reports a green job; the outcome lands in the step
+   summary and the uploaded `stress-run.log`. Delete that line once a green
+   container run has been observed on the runner to turn it into a hard gate. On
+   a PR from a fork the job's token is read-only whatever `permissions:` asks
+   for, so the layer cache is skipped (BuildKit only warns) and that run pays the
+   full image build.
+2. **The interlock is pinned off in the required workflows.** `npm test` and
    `npm run test:no-build` do collect `build/tests/stress/**` (traced from
    `scripts/test.js`, which globs `build/tests/**/*.test.js`), and the scenarios
    skip unless `STRESS_ALLOW_PROCESS_KILLS` is exactly `true`. `ci.yml` and
-   `run-tests.yml` now set it to `'false'` explicitly, so no runner-level
-   variable can arm a process-killing suite inside a required check. Locally the
-   same collection costs 12 skipped tests and ~0.5s.
+   `run-tests.yml` set it to `'false'` explicitly, so no runner-level variable
+   can arm a process-killing suite inside a required check. Locally the same
+   collection costs 12 skipped tests and ~0.5s.
 
 `STRESS_ALLOW_PROCESS_KILLS=true` is set in exactly two places: the
 `test:stress` npm script (an explicit local invocation) and the stress image's
 `Dockerfile` (inside the throwaway container).
 
-Enable it the way you need it:
+The knobs, per trigger:
 
+- **Every PR**: nothing to do — `pull_request` is already the workflow's trigger.
+  While the run step keeps `continue-on-error: true` the check reports green even
+  when the suite reproduces defects, so read the step summary or download the
+  `stress-run-log` artifact for the real outcome.
 - **On demand**: Actions → _Stress test (process lifecycle)_ → Run workflow. The
   form takes the two knobs the local path has: `iterations` (the input's own
-  `default: '3'` is the single source of the count) and `chrome_args` — the
-  escape hatch for a runner whose kernel blocks a sandbox feature the container's
-  Chromium needs, i.e. `--no-sandbox`, without editing the workflow. It is
-  forwarded as one `-e STRESS_CHROME_ARGS=…` value, so a multi-switch value stays
-  intact.
-- **Nightly**: uncomment the `schedule:` block. Neither of those triggers has
-  dispatch `inputs`, so set `STRESS_ITERATIONS` to a literal in the run step's
-  `env:` while you are there — empty means the runner's own default of 20 rounds.
-- **On PRs**: uncomment the `pull_request:` block, and while the suite is still
-  red keep `continue-on-error: true` on the run step (already set) so the job
-  reports without blocking. Delete that line once the scenarios pass, and it
-  becomes a hard gate.
+  `default: '3'` is the source of the count) and `chrome_args` — the escape hatch
+  for a runner whose kernel blocks a sandbox feature the container's Chromium
+  needs, i.e. `--no-sandbox`, without editing the workflow. It is forwarded as
+  one `-e STRESS_CHROME_ARGS=…` value, so a multi-switch value stays intact.
+- **Nightly**: add the `schedule:` block shown in the workflow header. A
+  schedule carries no `inputs`, which the run step's
+  `STRESS_ITERATIONS: ${{ inputs.iterations || '3' }}` already covers — an empty
+  value would otherwise mean the runner's own default of 20 rounds.
 
 Every action is pinned to a commit SHA with its version in a trailing comment,
 the same way the required workflows pin theirs; `actions/checkout` and
@@ -190,18 +191,20 @@ and the three Docker/artifact actions were pinned when they were introduced.
 
 What the job needs, and why:
 
-| Step                                                                                     | Why                                                                                                                                                                                                                            |
-| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `actions/checkout` with `submodules: true`                                               | the host build compiles the vendored `third_party/devtools-frontend`                                                                                                                                                           |
-| `actions/setup-node` (24) + `npm ci` with `PUPPETEER_SKIP_DOWNLOAD: true`                | the browser lives in the image, not on the runner                                                                                                                                                                              |
-| `npm run build` with `NODE_OPTIONS=--max_old_space_size=4096`                            | a cold `tsc` over the DevTools sources needs more than Node's default heap — this is why the image ships `build/` instead of compiling it                                                                                      |
-| `docker/setup-buildx-action` + `docker/build-push-action` with `cache-from/to: type=gha` | keeps the `apt`/`npm ci` layers warm between runs — the `actions: write` permission on the job exists for this cache write; with only `contents: read` BuildKit warns and skips it, so every dispatch would pay the full build |
-| `docker run --init --tmpfs /tmp --security-opt seccomp=unconfined`                       | same isolation, init and Chromium sandbox settings the compose file uses — `--init` is what reaps the detached daemons the suite kills (see above)                                                                             |
-| `actions/upload-artifact` on `stress-run.log`                                            | the report and the assertion messages are the useful output                                                                                                                                                                    |
+| Step                                                                                     | Why                                                                                                                                                                                                                       |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `actions/checkout` with `submodules: true`                                               | the host build compiles the vendored `third_party/devtools-frontend`                                                                                                                                                      |
+| `actions/setup-node` (24) + `npm ci` with `PUPPETEER_SKIP_DOWNLOAD: true`                | the browser lives in the image, not on the runner                                                                                                                                                                         |
+| `npm run build` with `NODE_OPTIONS=--max_old_space_size=4096`                            | a cold `tsc` over the DevTools sources needs more than Node's default heap — this is why the image ships `build/` instead of compiling it                                                                                 |
+| `docker/setup-buildx-action` + `docker/build-push-action` with `cache-from/to: type=gha` | keeps the `apt`/`npm ci` layers warm between runs — the `actions: write` permission on the job exists for this cache write; with only `contents: read` BuildKit warns and skips it, so every run would pay the full build |
+| `docker run --init --tmpfs /tmp --security-opt seccomp=unconfined`                       | same isolation, init and Chromium sandbox settings the compose file uses — `--init` is what reaps the detached daemons the suite kills (see above)                                                                        |
+| `actions/upload-artifact` on `stress-run.log`                                            | the report and the assertion messages are the useful output                                                                                                                                                               |
 
-Runtime: ~3 minutes for a red pass, plus a few minutes for the first image build.
-`ubuntu-latest` runners have a working Docker daemon and the compose plugin, so
-the container path is available there without extra setup.
+Runtime: ~3 minutes for the suite and a few minutes for the image build (cached
+after the first run), on top of the job's own `npm ci` and `npm run build` — so a
+PR check is minutes, not seconds. `ubuntu-latest` runners have a working Docker
+daemon and the compose plugin, so the container path is available there without
+extra setup.
 
 The suite does **not** need privileged mode: it only signals processes of its own
 user inside the container. If Chromium refuses to start in the container, add

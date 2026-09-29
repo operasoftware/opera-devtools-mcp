@@ -1,20 +1,22 @@
 name: Stress test (process lifecycle)
 
 # The suite kills daemons, MCP servers and browsers, so it runs in a disposable
-# container and is deliberately NOT wired to pull_request or push: it is red
-# while the robustness work in docs/specs/stress-test-system-plan.md is
-# outstanding, and a permanently failing required check is noise.
+# container. It fires on every pull_request, where the run step's
+# `continue-on-error: true` keeps a red run from blocking the PR: the outcome
+# lands in the step summary and in the uploaded `stress-run.log` either way.
+# Delete that line once a green container run has been observed on the runner
+# and it becomes a hard gate.
 #
-# To enable it more broadly, uncomment either trigger:
+# `workflow_dispatch` stays for a run on demand, with the two knobs the local
+# path has. Any other event carries no `inputs`, so the run step reads them as
+# `inputs.iterations || '3'`: an empty iteration count would mean the runner's
+# own default of 20 rounds, not the 3 a dispatch starts from.
+#
+# To also run it nightly, add:
 #   schedule:
 #     - cron: '0 3 * * 1'
-#   pull_request:
-# and, while the suite is still red, keep `continue-on-error: true` on the run
-# step below. Remove that line once the scenarios pass and it becomes a hard
-# gate. Neither trigger carries `inputs`, so also give the run step's
-# `STRESS_ITERATIONS` a literal then: an empty value means the runner's own
-# default of 20 rounds, not the 3 the dispatch input starts from.
 on:
+  pull_request:
   workflow_dispatch:
     inputs:
       iterations:
@@ -82,13 +84,16 @@ jobs:
 
       - name: Run the stress suite
         id: stress
-        # Red until the robustness fixes land, so the job reports without
-        # blocking. Delete this line once the scenarios pass and it becomes a
-        # hard gate - no other change is needed.
+        # Non-blocking until a green container run has been observed on the
+        # runner: a failing step still writes its outcome to the step summary
+        # and uploads the report, it just does not fail the PR. Delete this line
+        # to make it a hard gate - no other change is needed.
         continue-on-error: true
         env:
-          # The input's `default` is the single source of the count.
-          STRESS_ITERATIONS: ${{ inputs.iterations }}
+          # The dispatch input's `default` is the source of the count. A
+          # `pull_request` run has no `inputs` at all, and an empty value means
+          # the runner's own default of 20 rounds (~25 minutes).
+          STRESS_ITERATIONS: ${{ inputs.iterations || '3' }}
           STRESS_CHROME_ARGS: ${{ inputs.chrome_args }}
         run: |
           set -o pipefail
