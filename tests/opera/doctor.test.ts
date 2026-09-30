@@ -47,6 +47,7 @@ const OPERA_ENV_KEYS = [
   'OPERA_CLI_BROWSER_URL',
   'OPERA_CLI_USER_DATA_DIR',
   'OPERA_CLI_HEADED',
+  'OPERA_CLI_LAUNCHER',
 ];
 
 /**
@@ -299,6 +300,29 @@ describe('doctor', () => {
       const output = await handleDoctor([], sessionId);
 
       assert.ok(output.includes('opera-browser-cli setup'), output);
+    });
+
+    it('prints the launcher retirement recipes only when the launcher ran it', async () => {
+      // Phase-2 discoverability: the recipes have to be pastable out of the two
+      // commands a user runs when the CLI looks like it did not upgrade.
+      const plain = await handleDoctor([], sessionId);
+      assert.doesNotMatch(plain, /compatibility launcher/);
+
+      process.env.OPERA_CLI_LAUNCHER = '1';
+      const launched = await handleDoctor([], sessionId);
+
+      assert.match(
+        launched,
+        /compatibility launcher \(opera-browser-cli@0\.1\.55\)/,
+      );
+      assert.ok(
+        launched.includes(
+          'npm i -g opera-devtools-mcp@latest opera-browser-cli@latest',
+        ),
+        launched,
+      );
+      assert.ok(launched.includes('npm rm -g opera-browser-cli'), launched);
+      assert.match(launched, /^ {2}config: warn /m);
     });
 
     it('reports that nothing needed repairing when nothing does', async () => {

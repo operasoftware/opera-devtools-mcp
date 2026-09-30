@@ -25,6 +25,7 @@ import {
 import {formatError} from '../opera/cliOutput.js';
 import {autoConfigure, shouldAutoConfigure} from '../opera/config.js';
 import {applyEnvToArgv, loadOperaCliConfig} from '../opera/envConfig.js';
+import {runLegacyMigrationGuard} from '../opera/legacyBridgeCleanup.js';
 
 /**
  * Configure a fresh machine in place, without asking. Skips pure queries and
@@ -57,6 +58,17 @@ function ensureConfigured(argv: string[]): void {
 // Promote ~/.opera-browser-cli/config into process.env (and warn on unknown
 // keys) before the CLI spawns the daemon, which inherits this environment.
 loadOperaCliConfig();
+
+// A machine that upgraded from the two-package era may still have the old HTTP
+// bridge running, holding port 9225 and a browser of its own. Nothing runs at
+// install time any more — npm ≥12 blocks install scripts unless the user opts in
+// — so this is the path that always runs: the launcher spawns this CLI for every
+// command, `--version` and `--help` included. One file read when there is no
+// bridge; the port probe behind it runs once per boot. Never throws.
+//
+// The home is the *invoking* user's, not `os.homedir()`: under `sudo`, the
+// bridge (and its PID file) belongs to the user who started it.
+await runLegacyMigrationGuard();
 
 // The daemon cannot import this module before its own static imports reach
 // `third_party`, so the guard travels to it (and to the MCP server it spawns)

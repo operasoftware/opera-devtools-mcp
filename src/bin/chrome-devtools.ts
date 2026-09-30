@@ -25,6 +25,7 @@ import {
   registerOperaCommands,
   registerToolCommand,
 } from '../opera/cliCommands.js';
+import {launcherMigrationNotice} from '../opera/launcherNotice.js';
 import {hideBin, yargs} from '../third_party/index.js';
 import {checkForUpdates} from '../utils/check-for-updates.js';
 import {VERSION} from '../version.js';
@@ -43,6 +44,14 @@ await checkForUpdates(
 );
 
 const DEFAULT_CLI_ARGS = ['--viaCli'];
+
+// `--version` is also what a user runs when something looks wrong, so it has to
+// carry the phase-2 recipe when the compatibility launcher is what ran this CLI
+// (`src/opera/launcherNotice.ts`). Without the marker the banner is the plain
+// version, exactly as before.
+const versionBanner = [VERSION, launcherMigrationNotice()]
+  .filter(Boolean)
+  .join('\n\n');
 
 async function start(args: string[], sessionId: string) {
   const combinedArgs = [...DEFAULT_CLI_ARGS, ...args];
@@ -84,7 +93,7 @@ const y = yargs(hideBin(process.argv))
     },
   })
   .demandCommand()
-  .version(VERSION)
+  .version(versionBanner)
   .strict()
   .help(true)
   .wrap(120)

@@ -36,6 +36,7 @@ import {
   getConfigFile,
   readConfigFile,
 } from './envConfig.js';
+import {launcherMigrationNotice} from './launcherNotice.js';
 import {
   inspectProfileLock,
   probeDevToolsEndpoint,
@@ -342,6 +343,7 @@ export async function handleDoctor(
         ? `fixed[${applied.length}]:\n${applied.map(line => `  ${line}`).join('\n')}`
         : 'fixed: nothing needed repairing',
       renderChecks(after),
+      launcherMigrationNotice(),
     ]);
   }
 
@@ -376,5 +378,6 @@ export async function handleDoctor(
     await encode({doctor: summarize(checks)}),
     renderChecks(checks),
     help.length > 0 ? renderHelp(help) : '',
+    launcherMigrationNotice(),
   ]);
 }
