@@ -8,10 +8,12 @@ import {spawn} from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';
 
+import {ensureCleanStart, readExitReason} from '../opera/daemonLifecycle.js';
+import {nameSpawnFailure, openDaemonLog} from '../opera/daemonLog.js';
+import {requestOverSocket} from '../opera/daemonStreaming.js';
 import type {CallToolResult} from '../third_party/index.js';
-import {PipeTransport} from '../third_party/index.js';
 import {getTempFilePath} from '../utils/files.js';
-import {logger, puppeteerLogger} from '../utils/logger.js';
+import {logger} from '../utils/logger.js';
 
 import type {
   DaemonMessage,
@@ -111,29 +113,46 @@ async function waitForDaemonReady(sessionId: string) {
 }
 
 export async function startDaemon(mcpArgs: string[] = [], sessionId: string) {
-  if (isDaemonRunning(sessionId)) {
+  // Not `isDaemonRunning`: that reads the pid file, and a daemon whose pid file
+  // is gone (or whose socket a racing starter unlinked) is invisible to it.
+  // `ensureCleanStart` probes the socket and reaps whatever the last daemon left
+  // behind, so the daemon we are about to fork is the only one in the session.
+  if (await ensureCleanStart(sessionId)) {
     logger?.('Daemon is already running');
     await waitForDaemonReady(sessionId);
     return;
   }
 
-  const pidFilePath = getPidFilePath(sessionId);
-
-  if (fs.existsSync(pidFilePath)) {
-    fs.unlinkSync(pidFilePath);
-  }
-
   logger?.('Starting daemon...', ...mcpArgs);
-  const child = spawn(process.execPath, [DAEMON_SCRIPT_PATH, ...mcpArgs], {
-    detached: true,
-    stdio: 'ignore',
-    env: {...process.env, CHROME_DEVTOOLS_MCP_SESSION_ID: sessionId},
-    cwd: process.cwd(),
-    windowsHide: true,
-  });
+  const pidFilePath = getPidFilePath(sessionId);
+  const logFd = openDaemonLog(sessionId);
+  let child;
+  try {
+    child = spawn(process.execPath, [DAEMON_SCRIPT_PATH, ...mcpArgs], {
+      detached: true,
+      // Not 'ignore' unless there was nothing to open: the daemon is detached
+      // with no terminal, so discarding its output leaves a daemon that dies
+      // silently unexplainable. The file is what the mid-command failure below
+      // points the user at.
+      stdio: logFd === 'ignore' ? 'ignore' : ['ignore', logFd, logFd],
+      env: {...process.env, CHROME_DEVTOOLS_MCP_SESSION_ID: sessionId},
+      cwd: process.cwd(),
+      windowsHide: true,
+    });
+  } finally {
+    // The child holds its own descriptor; the parent's copy would outlive it.
+    if (logFd !== 'ignore') {
+      fs.closeSync(logFd);
+    }
+  }
   child.unref();
 
-  await waitForFile(pidFilePath);
+  // The pid file and the spawn's own failure, whichever comes first. See
+  // `opera/daemonLog.ts` for why a failed spawn must not surface as a timeout.
+  await Promise.race([
+    waitForFile(pidFilePath),
+    nameSpawnFailure(child, sessionId),
+  ]);
   await waitForDaemonReady(sessionId);
 }
 
@@ -141,15 +160,25 @@ const SEND_COMMAND_TIMEOUT = 60_000; // ms
 
 /**
  * `sendCommand` opens a socket connection sends a single command and disconnects.
+ *
+ * The frame protocol — including `onLog`, which opts the request into the
+ * streaming variant and hands each chunk over as it arrives — lives in
+ * `opera/daemonStreaming.ts`'s `requestOverSocket`.
  */
 export async function sendCommand(
   command: DaemonMessage,
   sessionId: string,
   timeout = SEND_COMMAND_TIMEOUT,
+  onLog?: (chunk: string) => void,
 ): Promise<DaemonResponse> {
   // Before connecting and sending, verify the daemon is still alive.
   if (!isDaemonRunning(sessionId)) {
-    throw new Error('Daemon is not running.');
+    // A daemon that tore itself down leaves a reason behind; surfacing it is
+    // the difference between "Daemon is not running." and knowing why.
+    const reason = readExitReason(sessionId);
+    throw new Error(
+      reason ? `Daemon is not running: ${reason}` : 'Daemon is not running.',
+    );
   }
 
   const socketPath = getSocketPath(sessionId);
@@ -158,31 +187,7 @@ export async function sendCommand(
     path: socketPath,
   });
 
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      socket.destroy();
-      reject(new Error('Timeout waiting for daemon response'));
-    }, timeout);
-
-    const transport = new PipeTransport(socket, socket, puppeteerLogger);
-    transport.onmessage = async (message: string) => {
-      clearTimeout(timer);
-      logger?.('onmessage', message);
-      resolve(JSON.parse(message));
-    };
-    socket.on('error', error => {
-      clearTimeout(timer);
-      logger?.('Socket error:', error);
-      reject(error);
-    });
-    socket.on('close', () => {
-      clearTimeout(timer);
-      logger?.('Socket closed:');
-      reject(new Error('Socket closed'));
-    });
-    logger?.('Sending message', command);
-    transport.send(JSON.stringify(command));
-  });
+  return requestOverSocket({socket, command, sessionId, timeout, onLog});
 }
 
 export async function stopDaemon(sessionId: string) {

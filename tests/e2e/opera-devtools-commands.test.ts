@@ -13,8 +13,9 @@ import {
   assertDaemonIsRunning,
   runCli,
 } from '../utils.js';
+import {CLI_BIN_NAME} from '../../src/opera/branding.js';
 
-describe('opera-devtools', () => {
+describe(CLI_BIN_NAME, () => {
   let sessionId: string;
 
   beforeEach(async () => {
@@ -60,7 +61,7 @@ describe('opera-devtools', () => {
       `start command failed: ${startResult.stderr}`,
     );
 
-    const result = await runCli(['take_screenshot', '1'], sessionId);
+    const result = await runCli(['take_screenshot'], sessionId);
     assert.strictEqual(
       result.status,
       0,
@@ -75,35 +76,39 @@ describe('opera-devtools', () => {
   it('fails to invoke list_network_requests when categoryNetwork is disabled', async () => {
     await runCli(['start', '--categoryNetwork=false'], sessionId);
 
-    const result = await runCli(['list_network_requests', '1'], sessionId);
-    assert.strictEqual(result.status, 0);
+    const result = await runCli(['list_network_requests'], sessionId);
+    // The fork's exit-code contract: an unavailable tool is exit 2 ("fix the
+    // command"), where upstream treated every tool result as a clean run. The
+    // diagnosis is a failure, so it is the fork's `error`/`code` document on
+    // stderr — upstream printed the tool's result text to stdout instead.
+    assert.strictEqual(result.status, 2);
 
     assert(
-      result.stdout.includes(
+      result.stderr.includes(
         'Tool list_network_requests is in category Network which is currently disabled',
       ),
-      'error message is unexpected: ' + result.stdout,
+      'error message is unexpected: ' + result.stderr,
     );
     assert(
-      result.stdout.includes('opera-devtools start --categoryNetwork=true'),
-      'restart command suggestion is missing: ' + result.stdout,
+      result.stderr.includes(`${CLI_BIN_NAME} start --categoryNetwork=true`),
+      'restart command suggestion is missing: ' + result.stderr,
     );
   });
 
   it('fails to invoke click_at when experimentalVision is disabled (default)', async () => {
     await runCli(['start'], sessionId);
 
-    const result = await runCli(['click_at', '1', '100', '100'], sessionId);
-    assert.strictEqual(result.status, 0);
+    const result = await runCli(['click_at', '100', '100'], sessionId);
+    assert.strictEqual(result.status, 2);
     assert(
-      result.stdout.includes(
+      result.stderr.includes(
         'Tool click_at requires experimental feature --experimentalVision and is currently disabled',
       ),
-      'error message is unexpected: ' + result.stdout,
+      'error message is unexpected: ' + result.stderr,
     );
     assert(
-      result.stdout.includes('opera-devtools start --experimentalVision=true'),
-      'restart command suggestion is miss: ' + result.stdout,
+      result.stderr.includes(`${CLI_BIN_NAME} start --experimentalVision=true`),
+      'restart command suggestion is missing: ' + result.stderr,
     );
   });
 
@@ -111,42 +116,44 @@ describe('opera-devtools', () => {
     await runCli(['start', '--no-javascript-evaluation'], sessionId);
 
     const result = await runCli(['evaluate_script', '() => 1'], sessionId);
-    assert.strictEqual(result.status, 0);
+    assert.strictEqual(result.status, 2);
     assert(
-      result.stdout.includes(
+      result.stderr.includes(
         'Tool evaluate_script requires flag --javascriptEvaluation and is currently disabled',
       ),
-      'error message is unexpected: ' + result.stdout,
+      'error message is unexpected: ' + result.stderr,
     );
     assert(
-      result.stdout.includes(
-        'opera-devtools start --javascriptEvaluation=true',
+      result.stderr.includes(
+        `${CLI_BIN_NAME} start --javascriptEvaluation=true`,
       ),
-      'restart command suggestion is missing: ' + result.stdout,
+      'restart command suggestion is missing: ' + result.stderr,
     );
 
     const navResult = await runCli(
-      ['navigate_page', '1', '--url', 'javascript:alert(1)'],
+      ['navigate_page', '--url', 'javascript:alert(1)'],
       sessionId,
     );
-    assert.strictEqual(navResult.status, 0);
+    assert.strictEqual(navResult.status, 2);
     assert(
-      navResult.stdout.includes(
+      navResult.stderr.includes(
         'Navigating to javascript: URLs is not allowed when JavaScript evaluation is disabled.',
       ),
-      'error message is unexpected: ' + navResult.stdout,
+      'error message is unexpected: ' + navResult.stderr,
     );
 
     const initScriptResult = await runCli(
-      ['navigate_page', '1', '--initScript', 'alert(1)'],
+      ['navigate_page', '--initScript', 'alert(1)'],
       sessionId,
     );
-    assert.strictEqual(initScriptResult.status, 0);
+    assert.strictEqual(initScriptResult.status, 2);
+    // TOON escapes the quotes inside the message, so the assertion is on the
+    // parts of it that survive that escaping, plus the code it classifies to.
     assert(
-      initScriptResult.stdout.includes(
-        'Unknown argument for tool "navigate_page": "initScript"',
-      ),
-      'error message is unexpected: ' + initScriptResult.stdout,
+      initScriptResult.stderr.includes('Unknown argument for tool') &&
+        initScriptResult.stderr.includes('initScript') &&
+        initScriptResult.stderr.includes('code: VALIDATION_ERROR'),
+      'error message is unexpected: ' + initScriptResult.stderr,
     );
   });
 
@@ -162,7 +169,7 @@ describe('opera-devtools', () => {
     );
 
     const emulateResult = await runCli(
-      ['emulate', '1', '--cpuThrottlingRate', '2'],
+      ['emulate', '--cpuThrottlingRate', '2'],
       sessionId,
     );
     assert.strictEqual(
@@ -171,7 +178,7 @@ describe('opera-devtools', () => {
       `emulate command failed: ${emulateResult.stderr}`,
     );
 
-    const result = await runCli(['performance_start_trace', '1'], sessionId);
+    const result = await runCli(['performance_start_trace'], sessionId);
     assert.strictEqual(
       result.status,
       0,

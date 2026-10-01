@@ -32,6 +32,7 @@ export {
   ListRootsRequestSchema,
   RootsListChangedNotificationSchema,
   ListRootsResultSchema,
+  LoggingMessageNotificationSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 export {z as zod} from 'zod';
 export {default as ajv} from 'ajv';
@@ -39,9 +40,19 @@ export {
   Locator,
   PredefinedNetworkConditions,
   KnownDevices,
-  CDPSessionEvent,
   ScreenRecorder,
 } from 'puppeteer-core';
+// The public `puppeteer-core` re-export strips `@internal` namespace members,
+// hiding `CDPSessionEvent.Disconnected` — the only signal that a CDP session
+// died. The internal module keeps the full namespace, so import it from there.
+// Internal paths pin us to a puppeteer-core version; both imports below are
+// verified against puppeteer-core 25.10.0 (`puppeteer` in devDependencies).
+export {CDPSessionEvent} from 'puppeteer-core/internal/api/CDPSession.js';
+// Same shape for `TargetCloseError`: the class is exported at runtime but is
+// `@internal` in the public declarations, so it can only be imported as a value
+// from the internal module. `ConnectionClosedError` is public.
+export {TargetCloseError} from 'puppeteer-core/internal/common/Errors.js';
+export {ConnectionClosedError} from 'puppeteer-core';
 export {default as puppeteer} from 'puppeteer-core';
 export type * from 'puppeteer-core';
 export {PipeTransport} from 'puppeteer-core/internal/node/PipeTransport.js';

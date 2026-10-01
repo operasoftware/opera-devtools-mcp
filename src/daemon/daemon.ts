@@ -6,12 +6,24 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import fs, {constants, openSync, writeSync, closeSync} from 'node:fs';
+import fs, {constants, writeSync, closeSync} from 'node:fs';
 import {createServer, type Server} from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 
+import {claimPidFile} from '../opera/daemonPidFile.js';
+import {
+  installShutdownHandlers,
+  recordShutdownReason,
+} from '../opera/daemonShutdown.js';
+import {
+  dispatchSocketMessage,
+  reportStartupFailure,
+} from '../opera/daemonSocket.js';
+import {attachLogForwarding} from '../opera/daemonStreaming.js';
+import {callDaemonTool} from '../opera/daemonToolCall.js';
+import {superviseMcpServer} from '../opera/mcpServerSupervisor.js';
 import {
   Client,
   PipeTransport,
@@ -84,20 +96,11 @@ try {
 
 let fd = -1;
 try {
-  // Open the file with flags to:
-  // - O_WRONLY: Write-only
-  // - O_CREAT: Create if it doesn't exist
-  // - O_TRUNC: Truncate to zero length if it exists
-  // - O_NOFOLLOW: DO NOT follow symlinks.
-  // - 0o600: Permissions: read/write for owner, no permissions for others.
-  fd = openSync(
-    pidFilePath,
-    constants.O_WRONLY |
-      constants.O_CREAT |
-      constants.O_TRUNC |
-      constants.O_NOFOLLOW,
-    0o600,
-  );
+  // The claim is `O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW` — write only,
+  // create if absent, fail if another daemon owns it, never follow a symlink —
+  // at 0o600. See `opera/daemonPidFile.ts` for why it is not upstream's
+  // `O_TRUNC`.
+  fd = claimPidFile(sessionId);
   writeSync(fd, process.pid.toString());
 } catch (err) {
   console.error(
@@ -125,16 +128,26 @@ const mcpServerArgs = process.argv.slice(2);
 let mcpClient: Client | null = null;
 let mcpTransport: StdioClientTransport | null = null;
 let server: Server | null = null;
+/** Set once `listen` succeeds, so a later failure knows it owns the socket. */
+let bound = false;
+/** Brings the MCP server back when its stdio child dies; see the module. */
+const mcpSupervisor = superviseMcpServer({
+  sessionId,
+  connect: setupMCPClient,
+  handles: () => ({client: mcpClient, transport: mcpTransport}),
+  giveUp: () => cleanup(1),
+});
 
 async function setupMCPClient() {
   console.log('Setting up MCP client connection...');
 
   // Create stdio transport for chrome-devtools-mcp
-  mcpTransport = new StdioClientTransport({
+  const transport = new StdioClientTransport({
     command: process.execPath,
     args: [INDEX_SCRIPT_PATH, ...mcpServerArgs],
     env: process.env as Record<string, string>,
   });
+  mcpTransport = transport;
   mcpClient = new Client(
     {
       name: DAEMON_CLIENT_NAME,
@@ -144,7 +157,18 @@ async function setupMCPClient() {
       capabilities: {},
     },
   );
-  await mcpClient.connect(mcpTransport);
+  // Set onclose BEFORE connect: the SDK's Protocol.connect() captures the
+  // transport's existing onclose and wraps it. Setting it after connect
+  // overwrites that wrapper, so _onclose() never runs and pending callTool
+  // requests hang forever when the MCP server dies. The callback carries the
+  // transport it belongs to, so a respawn can tell a server it replaced from the
+  // one it is watching.
+  transport.onclose = () => mcpSupervisor.onTransportClosed(transport);
+  await mcpClient.connect(transport);
+
+  // Opera AI tools stream their output as `notifications/message` chunks; the
+  // socket protocol carries them to the CLI. See `opera/daemonStreaming.ts`.
+  attachLogForwarding(mcpClient);
 
   console.log('MCP client connected');
 }
@@ -158,7 +182,7 @@ interface McpResult {
   content?: McpContent[] | string;
   text?: string;
 }
-async function handleRequest(msg: DaemonMessage) {
+async function handleRequest(msg: DaemonMessage, streamToken?: string) {
   try {
     if (msg.method === 'invoke_tool') {
       if (!mcpClient) {
@@ -166,9 +190,10 @@ async function handleRequest(msg: DaemonMessage) {
       }
       const {tool, args} = msg;
 
-      const result = (await mcpClient.callTool({
-        name: tool,
-        arguments: args || {},
+      const result = (await callDaemonTool(mcpClient, {
+        tool,
+        args,
+        streamToken,
       })) as McpResult | McpContent[];
 
       return {
@@ -180,7 +205,7 @@ async function handleRequest(msg: DaemonMessage) {
       await started;
       // Trigger cleanup asynchronously.
       setImmediate(() => {
-        void cleanup();
+        void cleanup(0, 'stopped by request');
       });
       return {
         success: true,
@@ -230,7 +255,11 @@ async function startSocketServer() {
       const transport = new PipeTransport(socket, socket, puppeteerLogger);
       transport.onmessage = async (message: string) => {
         logger?.('onmessage', message);
-        const response = await handleRequest(JSON.parse(message));
+        const response = await dispatchSocketMessage(
+          message,
+          transport,
+          handleRequest,
+        );
         transport.send(JSON.stringify(response));
         socket.end();
       };
@@ -246,6 +275,7 @@ async function startSocketServer() {
         writableAll: false,
       },
       async () => {
+        bound = true;
         console.log(`Daemon server listening on ${socketPath}`);
 
         try {
@@ -265,7 +295,14 @@ async function startSocketServer() {
   });
 }
 
-async function cleanup(exitCode = 0) {
+async function cleanup(exitCode = 0, reason?: string) {
+  // The reason is the diagnostic, so it goes first: `recordShutdownReason` is
+  // best-effort, and nothing else in this teardown should be able to cost us it.
+  recordShutdownReason(sessionId, reason);
+  // Then stop supervising. Closing the client below closes the transport, which
+  // would otherwise land in the respawn path and spawn a replacement server
+  // while this teardown is running.
+  mcpSupervisor.stop();
   console.log('Cleaning up daemon...');
 
   try {
@@ -297,29 +334,21 @@ async function cleanup(exitCode = 0) {
   process.exit(exitCode);
 }
 
-// Handle shutdown signals
-process.on('SIGTERM', () => {
-  void cleanup();
-});
-process.on('SIGINT', () => {
-  void cleanup();
-});
-process.on('SIGHUP', () => {
-  void cleanup();
-});
-
-// Handle uncaught errors
-process.on('uncaughtException', error => {
-  logger?.('Uncaught exception:', error);
-  void cleanup(1);
-});
-process.on('unhandledRejection', error => {
-  logger?.('Unhandled rejection:', error);
-  void cleanup(1);
+// The shutdown wiring — three signals and the two uncaught-error handlers, each
+// naming itself in the reason the CLI reports — lives in
+// `opera/daemonShutdown.ts`. Every path that reaches it records why it left, so
+// "left no reason behind" means only what it says: a SIGKILL or the OOM killer.
+installShutdownHandlers({
+  onSignal: reason => cleanup(0, reason),
+  onException: reason => cleanup(1, reason),
 });
 
 // Start the server
 const started = startSocketServer().catch(error => {
   logger?.('Failed to start daemon server:', error);
-  void cleanup(1);
+  void reportStartupFailure(error, {
+    socketBound: bound,
+    sessionId,
+    teardown: reason => cleanup(1, reason),
+  });
 });

@@ -1,0 +1,49 @@
+# Runs the stress suite in the disposable container, where killing daemons,
+# MCP servers and browsers cannot touch anything but test subjects.
+#
+#   docker compose -f tests/stress/docker/docker-compose.yml up --build \
+#     --abort-on-container-exit --exit-code-from stress-test
+#
+# The image carries the stress environment (chromium path, telemetry opt-outs,
+# STRESS_ALLOW_PROCESS_KILLS); only what varies per run is set here.
+#
+# `name` is pinned because compose otherwise derives the project (and therefore
+# the image and container names) from this directory, which reads as
+# `docker-stress-test`.
+name: opera-devtools-stress
+
+services:
+  stress-test:
+    build:
+      context: ../../..
+      dockerfile: tests/stress/docker/Dockerfile
+    working_dir: /app
+    environment:
+      # Rounds of all 12 scenarios. Cheap while the suite is red: a scenario
+      # that already failed is not repeated, so a first run costs one pass
+      # (~3 min) regardless. Raise it - the runner's default is 20 - for deeper
+      # flakiness hunting once the suite passes.
+      #
+      # Resolved from the caller's shell, so `STRESS_ITERATIONS=10 npm run
+      # test:stress:docker` means something; 3 is the default when it is unset
+      # or empty. `scripts/stress-docker.js` forwards the same two names on its
+      # no-compose fallback path - keep the defaults in step.
+      - STRESS_ITERATIONS=${STRESS_ITERATIONS:-3}
+      # Extra Chrome switches, e.g. `STRESS_CHROME_ARGS=--no-sandbox` for a host
+      # whose Chromium refuses the default sandbox.
+      - STRESS_CHROME_ARGS=${STRESS_CHROME_ARGS:-}
+    # Process ids, pid files and sockets are per-container and wiped with it.
+    tmpfs:
+      - /tmp
+    # The daemons, MCP servers and browsers under test are detached: their
+    # parent (the CLI) exits first, so they are re-parented to pid 1. Without a
+    # real init, pid 1 is the node test runner, which does not reap processes it
+    # did not spawn - every daemon the suite kills then sits in the process
+    # table as a zombie, and `process.kill(pid, 0)` (the liveness check this
+    # suite and the product both use) reports a zombie as alive. `init: true`
+    # runs tini as pid 1 so an exited daemon is reaped like it would be on a
+    # developer's machine.
+    init: true
+    # Chromium's sandbox needs unconfined seccomp inside the container.
+    security_opt:
+      - seccomp:unconfined

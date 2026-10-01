@@ -13,8 +13,9 @@ import {
   assertDaemonIsRunning,
   runCli,
 } from '../utils.js';
+import {CLI_BIN_NAME} from '../../src/opera/branding.js';
 
-describe('opera-devtools', () => {
+describe(CLI_BIN_NAME, () => {
   let sessionId: string;
 
   beforeEach(async () => {

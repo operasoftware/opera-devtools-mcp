@@ -72,6 +72,11 @@ jobs:
           npm run test:no-build --
           ${{ matrix.os == 'windows-latest' && '--test-concurrency=1' || '' }}
           ${{ github.event_name == 'merge_group' && '--retry' || '' }}
+        env:
+          # `npm run test:no-build` collects `build/tests/stress/**` too; the
+          # scenarios skip unless this is exactly 'true'. Pinned off so the
+          # required run never signals a process, whatever the runner holds.
+          STRESS_ALLOW_PROCESS_KILLS: 'false'
 
       - name: Run notices tests
         shell: bash

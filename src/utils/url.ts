@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import {isOperaStartPage} from '../opera/operaPages.js';
+
 const ALLOWED_PROTOCOLS = new Set(['http:', 'https:', 'ws:', 'wss:']);
 const IPV4_LOOPBACK_REGEX = /^127(?:\.(?:25[0-5]|2[0-4]\d|[01]?\d\d?)){3}$/;
 
@@ -93,6 +95,11 @@ export function isAllowedUrl(
         path === 'new-tab-page' ||
         path.startsWith('inspect'))
     ) {
+      return true;
+    }
+    // Opera's start page, which is where every tab the user opens by hand
+    // begins; see `opera/operaPages.ts` for why it cannot be filtered out.
+    if (isOperaStartPage(parsed)) {
       return true;
     }
   }
