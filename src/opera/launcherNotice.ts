@@ -8,7 +8,7 @@
 /**
  * What to tell a user whose CLI was delivered by the compatibility launcher.
  *
- * `opera-browser-cli@0.1.55` is a launcher: it declares the old package name
+ * `opera-browser-cli@0.1.56` is a launcher: it declares the old package name
  * and the old bin name, depends on this package, and spawns this CLI. That is
  * how a habit-driven `npm i -g opera-browser-cli` (or `npm update -g
  * opera-browser-cli`) picks up the new implementation without `--force` and
@@ -56,7 +56,7 @@ const LAUNCHER_ENV = 'OPERA_CLI_LAUNCHER';
  * not be reported, because `npm i -g opera-browser-cli@latest` would install
  * exactly what is already there:
  *
- *   - `0.1.55`, the compatibility launcher that delivered this install,
+ *   - `0.1.56`, the compatibility launcher that delivered this install,
  *     recognised by its `bin/cli.js` marker;
  *   - `0.2.0`, the bin-less tombstone that retires the launcher, recognised by
  *     version (`0.2.0` is the first release without a bin).
@@ -114,7 +114,7 @@ export function launcherMigrationNotice(): string {
     return '';
   }
   return [
-    'Notice: this CLI was launched via the compatibility launcher (opera-browser-cli@0.1.55).',
+    'Notice: this CLI was launched via the compatibility launcher (opera-browser-cli@0.1.56).',
     'To complete migration, run either:',
     '  npm i -g opera-devtools-mcp@latest opera-browser-cli@latest',
     '    (then optionally: npm rm -g opera-browser-cli)',

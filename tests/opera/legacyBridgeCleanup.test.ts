@@ -428,7 +428,7 @@ describe('runLegacyMigrationGuard', () => {
     fs.mkdirSync(join(dir, 'bin'), {recursive: true});
     fs.writeFileSync(
       join(dir, 'package.json'),
-      JSON.stringify({name: 'opera-browser-cli', version: '0.1.55'}),
+      JSON.stringify({name: 'opera-browser-cli', version: '0.1.56'}),
     );
     fs.writeFileSync(join(dir, 'bin', 'cli.js'), '#!/usr/bin/env node\n');
 

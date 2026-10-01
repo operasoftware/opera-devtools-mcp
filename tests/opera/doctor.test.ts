@@ -313,7 +313,7 @@ describe('doctor', () => {
 
       assert.match(
         launched,
-        /compatibility launcher \(opera-browser-cli@0\.1\.55\)/,
+        /compatibility launcher \(opera-browser-cli@0\.1\.56\)/,
       );
       assert.ok(
         launched.includes(
